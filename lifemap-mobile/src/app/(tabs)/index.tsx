@@ -4,9 +4,14 @@ import { Pressable, Text, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  clusterPoints,
+  zoomLevelFor,
+  type MapPoint,
+} from '@/features/map/cluster';
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
 import { CountrySheet } from '@/features/map/CountrySheet';
-import { countryAt } from '@/features/map/geo';
+import { countryAt, countryName, flagEmoji } from '@/features/map/geo';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
 import { useMapFocus } from '@/features/map/useMapFocus';
@@ -54,6 +59,43 @@ export default function WorldMapScreen() {
     [memories],
   );
 
+  // Zoom-aware detail: countries → cities → individual pins as you zoom in.
+  const [latDelta, setLatDelta] = useState(100);
+  const level = zoomLevelFor(latDelta);
+
+  const points = useMemo<MapPoint[]>(
+    () => [
+      ...places.map((p) => ({
+        id: `p-${p.id}`,
+        lat: p.coordinates.lat,
+        lng: p.coordinates.lng,
+        city: p.city,
+        country: p.country,
+      })),
+      ...mappedMemories.map((m) => ({
+        id: `m-${m.id}`,
+        lat: m.coordinates!.lat,
+        lng: m.coordinates!.lng,
+        city: m.city ?? null,
+        country: m.country ?? null,
+      })),
+    ],
+    [places, mappedMemories],
+  );
+
+  const clusters = useMemo(
+    () => (level === 'individual' ? [] : clusterPoints(points, level)),
+    [points, level],
+  );
+
+  const zoomToCluster = (lat: number, lng: number) => {
+    const delta = level === 'country' ? 7 : 1.5;
+    mapRef.current?.animateToRegion(
+      { latitude: lat, longitude: lng, latitudeDelta: delta, longitudeDelta: delta },
+      600,
+    );
+  };
+
   const fills = useMemo(() => countryFills(rollup), [rollup]);
 
   const stats = useMemo(() => {
@@ -76,6 +118,7 @@ export default function WorldMapScreen() {
           latitudeDelta: 100,
           longitudeDelta: 120,
         }}
+        onRegionChangeComplete={(r) => setLatDelta(r.latitudeDelta)}
         onPress={(e) => {
           // A pin tap also fires the map press on iOS; the marker handler
           // runs first and sets selectedPlace — don't fight it.
@@ -107,42 +150,69 @@ export default function WorldMapScreen() {
           />
         ))}
 
-        {places.map((place) => (
-          <Marker
-            key={place.id}
-            coordinate={{
-              latitude: place.coordinates.lat,
-              longitude: place.coordinates.lng,
-            }}
-            // Emoji markers re-render once, then freeze — without this Android
-            // re-rasterises every marker on every frame.
-            tracksViewChanges={false}
-            onPress={(e) => {
-              e.stopPropagation();
-              setSelectedCountry(null);
-              setSelectedPlace(place);
-            }}
-          >
-            <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
-          </Marker>
-        ))}
+        {/* Individual pins only when zoomed in; otherwise city/country bubbles. */}
+        {level === 'individual' &&
+          places.map((place) => (
+            <Marker
+              key={place.id}
+              coordinate={{
+                latitude: place.coordinates.lat,
+                longitude: place.coordinates.lng,
+              }}
+              // Emoji markers re-render once, then freeze — without this Android
+              // re-rasterises every marker on every frame.
+              tracksViewChanges={false}
+              onPress={(e) => {
+                e.stopPropagation();
+                setSelectedCountry(null);
+                setSelectedPlace(place);
+              }}
+            >
+              <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+            </Marker>
+          ))}
 
-        {mappedMemories.map((memory) => (
+        {level === 'individual' &&
+          mappedMemories.map((memory) => (
+            <Marker
+              key={`mem-${memory.id}`}
+              coordinate={{
+                latitude: memory.coordinates!.lat,
+                longitude: memory.coordinates!.lng,
+              }}
+              tracksViewChanges={false}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
+              }}
+            >
+              <Text style={{ fontSize: 24 }}>
+                {MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
+              </Text>
+            </Marker>
+          ))}
+
+        {clusters.map((c) => (
           <Marker
-            key={`mem-${memory.id}`}
-            coordinate={{
-              latitude: memory.coordinates!.lat,
-              longitude: memory.coordinates!.lng,
-            }}
-            tracksViewChanges={false}
+            key={`${level}-${c.key}`}
+            coordinate={{ latitude: c.lat, longitude: c.lng }}
             onPress={(e) => {
               e.stopPropagation();
-              router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
+              zoomToCluster(c.lat, c.lng);
             }}
           >
-            <Text style={{ fontSize: 24 }}>
-              {MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
-            </Text>
+            <View className="flex-row items-center gap-1.5 rounded-pill border border-white/25 bg-ink-800/95 px-2.5 py-1">
+              <Text className="text-xs font-semibold text-white">
+                {level === 'country'
+                  ? c.country
+                    ? `${flagEmoji(c.country)} ${countryName(c.country)}`
+                    : 'Somewhere'
+                  : (c.city ?? (c.country ? countryName(c.country) : 'Somewhere'))}
+              </Text>
+              <View className="rounded-full bg-horizon-500 px-1.5">
+                <Text className="text-[11px] font-bold text-white">{c.count}</Text>
+              </View>
+            </View>
           </Marker>
         ))}
       </MapView>
@@ -164,7 +234,9 @@ export default function WorldMapScreen() {
           </View>
         </Glass>
         <Text className="pt-2 text-center text-xs text-white/40">
-          Tap a country to mark it · tap a pin for details
+          {level === 'individual'
+            ? 'Tap a country to mark it · tap a pin for details'
+            : 'Tap a bubble to zoom in · pinch to see individual pins'}
         </Text>
       </View>
 

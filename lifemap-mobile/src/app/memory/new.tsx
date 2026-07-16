@@ -111,6 +111,7 @@ export default function NewMemoryScreen() {
       <ScrollView
         contentContainerClassName="gap-5 pb-12 pt-4"
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         <Text className="text-2xl font-bold text-white">New memory</Text>
 

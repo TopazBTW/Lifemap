@@ -125,6 +125,7 @@ export default function NewPlaceScreen() {
           keyExtractor={(hit) => hit.id}
           contentContainerClassName="gap-2 pb-10"
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
           renderItem={({ item }) => (
             <Pressable onPress={() => setPicked(item)}>
               <Glass>

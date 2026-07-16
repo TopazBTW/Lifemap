@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   ScrollView,
   Text,
   useWindowDimensions,
@@ -19,7 +20,7 @@ import {
 } from '@/features/memories/useMemories';
 import { LocationPicker } from '@/features/places/LocationPicker';
 import { MOODS } from '@/shared/types/domain';
-import { Button, Glass, Rating, Screen } from '@/shared/ui';
+import { Button, Glass, PhotoViewer, Rating, Screen } from '@/shared/ui';
 
 export default function MemoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,6 +28,7 @@ export default function MemoryDetailScreen() {
   const { width } = useWindowDimensions();
   const focusOn = useMapFocus((s) => s.focusOn);
   const [editingLocation, setEditingLocation] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   if (!memory) {
     return (
@@ -52,10 +54,14 @@ export default function MemoryDetailScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerClassName="gap-5 pb-12 pt-2">
+      <ScrollView
+        contentContainerClassName="gap-5 pb-12 pt-2"
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+      >
         <Button title="✕ Close" variant="ghost" size="sm" onPress={() => router.back()} />
 
-        {/* Gallery */}
+        {/* Gallery — tap a photo to view it fullscreen */}
         {photos.length ? (
           <ScrollView
             horizontal
@@ -63,13 +69,14 @@ export default function MemoryDetailScreen() {
             showsHorizontalScrollIndicator={false}
             className="rounded-card"
           >
-            {photos.map((p) => (
-              <Image
-                key={p.storagePath + p.downloadUrl.slice(-16)}
-                source={{ uri: p.downloadUrl }}
-                style={{ width: galleryW, height: galleryW, borderRadius: 20 }}
-                contentFit="cover"
-              />
+            {photos.map((p, i) => (
+              <Pressable key={p.storagePath + p.downloadUrl.slice(-16)} onPress={() => setViewerIndex(i)}>
+                <Image
+                  source={{ uri: p.downloadUrl }}
+                  style={{ width: galleryW, height: galleryW, borderRadius: 20 }}
+                  contentFit="cover"
+                />
+              </Pressable>
             ))}
           </ScrollView>
         ) : null}
@@ -164,6 +171,12 @@ export default function MemoryDetailScreen() {
           }
         />
       </ScrollView>
+
+      <PhotoViewer
+        photos={photos.map((p) => p.downloadUrl)}
+        index={viewerIndex}
+        onClose={() => setViewerIndex(null)}
+      />
     </Screen>
   );
 }

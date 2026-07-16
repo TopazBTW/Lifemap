@@ -173,6 +173,7 @@ export default function NewEstablishmentScreen() {
           keyExtractor={(hit) => hit.key}
           contentContainerClassName="gap-2 pb-10"
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
           renderItem={({ item }) => (
             <Pressable onPress={() => setPicked(item)}>
               <Glass>
@@ -218,6 +219,7 @@ export default function NewEstablishmentScreen() {
       <ScrollView
         contentContainerClassName="gap-5 pb-12 pt-4"
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         <Pressable onPress={() => setPicked(null)}>
           <Text className="text-sm text-horizon-300">‹ Search again</Text>
