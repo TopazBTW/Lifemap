@@ -9,6 +9,8 @@ import {
   zoomLevelFor,
   type MapPoint,
 } from '@/features/map/cluster';
+import { useMySpace } from '@/features/couple/useSharedSpace';
+import { useSpaceMemories, useSpacePlaces } from '@/features/couple/useSpaceItems';
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
 import { countryAt, countryName, flagEmoji } from '@/features/map/geo';
 import { LocationSheet } from '@/features/map/LocationSheet';
@@ -20,8 +22,12 @@ import { useMemories } from '@/features/memories/useMemories';
 import { useFoodEntries, useStayEntries } from '@/features/passport/usePassport';
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
+import { auth } from '@/shared/lib/firebase';
 import { MOODS, type Coordinates, type Place } from '@/shared/types/domain';
 import { Glass, Icon } from '@/shared/ui';
+
+/** Colour ring behind a partner's pins so you can tell whose is whose. */
+const PARTNER_COLOR = '#E86FB0';
 
 type TappedLocation = {
   iso: string | null;
@@ -57,6 +63,30 @@ export default function WorldMapScreen() {
   const { data: rollup } = useCountryRollup();
   const { cities: cityMarksMap } = useMarks();
 
+  // Couple mode: merge the partner's shared places/memories in, flagged so we
+  // can colour them differently.
+  const myUid = auth.currentUser?.uid;
+  const { space } = useMySpace();
+  const { data: spacePlaces = [] } = useSpacePlaces(space?.id);
+  const { data: spaceMemories = [] } = useSpaceMemories(space?.id);
+  const partnerName = space?.memberIds.find((u) => u !== myUid)
+    ? (space?.memberNames?.[space.memberIds.find((u) => u !== myUid)!] ?? 'Partner')
+    : null;
+
+  const allPlaces = useMemo(() => {
+    const byId = new Map<string, Place>();
+    for (const p of places) byId.set(p.id, p);
+    for (const p of spacePlaces) byId.set(p.id, p);
+    return Array.from(byId.values(), (p) => ({ ...p, isPartner: p.ownerId !== myUid }));
+  }, [places, spacePlaces, myUid]);
+
+  const allMemories = useMemo(() => {
+    const byId = new Map<string, (typeof memories)[number]>();
+    for (const m of memories) byId.set(m.id, m);
+    for (const m of spaceMemories) byId.set(m.id, m);
+    return Array.from(byId.values(), (m) => ({ ...m, isPartner: m.ownerId !== myUid }));
+  }, [memories, spaceMemories, myUid]);
+
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [tapped, setTapped] = useState<TappedLocation | null>(null);
   const [layers, setLayers] = useState<Layers>({
@@ -89,8 +119,8 @@ export default function WorldMapScreen() {
   }, [focusTarget, clearFocus]);
 
   const mappedMemories = useMemo(
-    () => (layers.memories ? memories.filter((m) => m.coordinates) : []),
-    [memories, layers.memories],
+    () => (layers.memories ? allMemories.filter((m) => m.coordinates) : []),
+    [allMemories, layers.memories],
   );
   const mappedFood = useMemo(
     () => (layers.food ? food.filter((f) => f.coordinates) : []),
@@ -112,7 +142,7 @@ export default function WorldMapScreen() {
   const points = useMemo<MapPoint[]>(() => {
     const pts: MapPoint[] = [];
     if (layers.places)
-      for (const p of places)
+      for (const p of allPlaces)
         pts.push({ id: `p-${p.id}`, lat: p.coordinates.lat, lng: p.coordinates.lng, city: p.city, country: p.country });
     for (const m of mappedMemories)
       pts.push({ id: `m-${m.id}`, lat: m.coordinates!.lat, lng: m.coordinates!.lng, city: m.city ?? null, country: m.country ?? null });
@@ -121,7 +151,7 @@ export default function WorldMapScreen() {
     for (const s of mappedStays)
       pts.push({ id: `s-${s.id}`, lat: s.coordinates!.lat, lng: s.coordinates!.lng, city: s.city ?? null, country: s.country ?? null });
     return pts;
-  }, [places, mappedMemories, mappedFood, mappedStays, layers.places]);
+  }, [allPlaces, mappedMemories, mappedFood, mappedStays, layers.places]);
 
   const clusters = useMemo(
     () => (level === 'individual' ? [] : clusterPoints(points, level)),
@@ -223,7 +253,7 @@ export default function WorldMapScreen() {
 
         {/* Individual pins only when zoomed in; otherwise cluster bubbles. */}
         {level === 'individual' && layers.places &&
-          places.map((place) => (
+          allPlaces.map((place) => (
             <Marker
               key={place.id}
               coordinate={{ latitude: place.coordinates.lat, longitude: place.coordinates.lng }}
@@ -234,7 +264,7 @@ export default function WorldMapScreen() {
                 setSelectedPlace(place);
               }}
             >
-              <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+              <PinBadge emoji={KIND_EMOJI[place.kind] ?? '📍'} partner={place.isPartner} />
             </Marker>
           ))}
 
@@ -249,9 +279,10 @@ export default function WorldMapScreen() {
                 router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
               }}
             >
-              <Text style={{ fontSize: 24 }}>
-                {MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
-              </Text>
+              <PinBadge
+                emoji={MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
+                partner={memory.isPartner}
+              />
             </Marker>
           ))}
 
@@ -333,6 +364,15 @@ export default function WorldMapScreen() {
             <LayerToggle emoji="📸" label="Memories" on={layers.memories} onPress={() => toggle('memories')} />
             <LayerToggle emoji="🍽️" label="Food & stays" on={layers.food} onPress={() => toggle('food')} />
             <LayerToggle emoji="🏙️" label="Cities" on={layers.cities} onPress={() => toggle('cities')} />
+            {partnerName ? (
+              <View className="mt-1 flex-row items-center gap-2 border-t border-white/10 px-2 pt-2">
+                <View
+                  className="h-3 w-3 rounded-full border-2"
+                  style={{ borderColor: PARTNER_COLOR }}
+                />
+                <Text className="text-[11px] text-white/60">{partnerName}’s pins</Text>
+              </View>
+            ) : null}
           </View>
         </Glass>
       </View>
@@ -356,6 +396,24 @@ export default function WorldMapScreen() {
           onClose={() => setTapped(null)}
         />
       ) : null}
+    </View>
+  );
+}
+
+/** A map pin's emoji, wrapped in a colored ring when it's the partner's. */
+function PinBadge({ emoji, partner }: { emoji: string; partner: boolean }) {
+  if (!partner) return <Text style={{ fontSize: 26 }}>{emoji}</Text>;
+  return (
+    <View
+      style={{
+        padding: 2,
+        borderRadius: 999,
+        borderWidth: 2,
+        borderColor: PARTNER_COLOR,
+        backgroundColor: 'rgba(232,111,176,0.22)',
+      }}
+    >
+      <Text style={{ fontSize: 22 }}>{emoji}</Text>
     </View>
   );
 }

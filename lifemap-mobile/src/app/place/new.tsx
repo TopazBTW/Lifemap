@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
+import { useShareTarget } from '@/features/couple/useSharedSpace';
 import { flagEmoji } from '@/features/map/geo';
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaceSearch, type PlaceHit } from '@/features/places/searchPlaces';
@@ -24,6 +25,7 @@ export default function NewPlaceScreen() {
   const [status, setStatus] = useState<PlaceStatus>('saved');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shareSpaceId = useShareTarget();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(input), 500);
@@ -44,6 +46,7 @@ export default function NewPlaceScreen() {
         coordinates: { lat: picked.lat, lng: picked.lng },
         country: picked.country,
         city: picked.city,
+        sharedSpaceId: shareSpaceId,
       });
       router.back();
     } catch (err) {

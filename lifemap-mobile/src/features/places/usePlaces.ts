@@ -41,7 +41,7 @@ export function usePlaces() {
   }));
 }
 
-/** Manually add a place to the map (the free-tier path — no reel pipeline). */
+/** Manually add a place to the map. `sharedSpaceId` shares it with a partner. */
 export async function addPlace(args: {
   name: string;
   kind: PlaceKind;
@@ -49,6 +49,7 @@ export async function addPlace(args: {
   coordinates: Coordinates;
   country: string;
   city?: string | null;
+  sharedSpaceId?: string | null;
 }) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('Not signed in.');
@@ -62,6 +63,7 @@ export async function addPlace(args: {
     city: args.city ?? null,
     tags: [],
     sourceReelId: null,
+    sharedSpaceId: args.sharedSpaceId ?? null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

@@ -9,6 +9,7 @@ import {
   useCreateMemory,
   type NewMemoryMedia,
 } from '@/features/memories/useMemories';
+import { useShareTarget } from '@/features/couple/useSharedSpace';
 import { countryName, flagEmoji } from '@/features/map/geo';
 import { LocationPicker } from '@/features/places/LocationPicker';
 import { reverseGeocode } from '@/features/places/searchPlaces';
@@ -31,6 +32,7 @@ export default function NewMemoryScreen() {
   const [location, setLocation] = useState<PickedLocation | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shareSpaceId = useShareTarget();
 
   const create = useCreateMemory();
 
@@ -97,6 +99,7 @@ export default function NewMemoryScreen() {
         country: location?.country ?? null,
         city: location?.city ?? null,
         media,
+        sharedSpaceId: shareSpaceId,
       },
       {
         onSuccess: () => router.back(),

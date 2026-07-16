@@ -5,18 +5,20 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { useMemo } from 'react';
 
 import { useSession } from '@/features/auth/session';
 import { auth, db } from '@/shared/lib/firebase';
-import { useLiveCollection } from '@/shared/lib/firestore-live';
+import { useLiveCollection, useLiveDoc } from '@/shared/lib/firestore-live';
 import type { BucketListItem, SharedSpace } from '@/shared/types/domain';
 
 /** Short, unambiguous invite code (no 0/O/1/I). */
@@ -136,4 +138,52 @@ export async function toggleBucketItem(id: string, done: boolean): Promise<void>
 
 export async function deleteBucketItem(id: string): Promise<void> {
   await deleteDoc(doc(db, 'bucketListItems', id));
+}
+
+// ─── Map sharing ─────────────────────────────────────────────────────────────
+
+/**
+ * The spaceId a user wants new places/memories tagged with (mirrors
+ * users/{uid}.shareSpaceId). Add flows read this and stamp `sharedSpaceId` so
+ * the item becomes visible to the partner (via the sharedWithMe rule).
+ */
+export function useShareTarget(): string | null {
+  const user = useSession((s) => s.user);
+  const ref = useMemo(
+    () => (user ? doc(db, 'users', user.uid) : null),
+    [user?.uid],
+  );
+  const { data } = useLiveDoc<{ shareSpaceId: string | null }>(
+    ['profile', user?.uid],
+    ref,
+    (_, d) => ({ shareSpaceId: (d.shareSpaceId ?? null) as string | null }),
+  );
+  return data?.shareSpaceId ?? null;
+}
+
+/**
+ * Turn map sharing on/off: records the preference on the user doc and
+ * back-/un-fills `sharedSpaceId` across all of the user's existing places and
+ * memories. Batched in chunks (Firestore caps a batch at 500 writes).
+ */
+export async function setMapSharing(spaceId: string, on: boolean): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in.');
+
+  await updateDoc(doc(db, 'users', uid), { shareSpaceId: on ? spaceId : null });
+
+  const value = on ? spaceId : null;
+  for (const coll of ['places', 'memories'] as const) {
+    const snap = await getDocs(
+      query(collection(db, coll), where('ownerId', '==', uid)),
+    );
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const d of docs.slice(i, i + 400)) {
+        batch.update(d.ref, { sharedSpaceId: value });
+      }
+      await batch.commit();
+    }
+  }
 }

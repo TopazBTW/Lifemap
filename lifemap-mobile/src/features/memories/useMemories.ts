@@ -93,6 +93,7 @@ type CreateMemoryArgs = {
   country?: string | null;
   city?: string | null;
   media: NewMemoryMedia[];
+  sharedSpaceId?: string | null;
 };
 
 export function useCreateMemory() {
@@ -135,7 +136,7 @@ export function useCreateMemory() {
         country: args.country ?? null,
         city: args.city ?? null,
         placeId: null,
-        sharedSpaceId: null,
+        sharedSpaceId: args.sharedSpaceId ?? null,
         occurredAt: Timestamp.fromDate(args.occurredAt),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

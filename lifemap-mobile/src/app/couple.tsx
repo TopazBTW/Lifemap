@@ -7,9 +7,11 @@ import {
   createSpace,
   deleteBucketItem,
   joinSpace,
+  setMapSharing,
   toggleBucketItem,
   useBucketList,
   useMySpace,
+  useShareTarget,
 } from '@/features/couple/useSharedSpace';
 import { auth } from '@/shared/lib/firebase';
 import type { BucketListItem, SharedSpace } from '@/shared/types/domain';
@@ -142,6 +144,8 @@ function SpaceView({ space }: { space: SharedSpace }) {
             </View>
           </Glass>
 
+          <ShareMapToggle spaceId={space.id} />
+
           <Text className="pt-2 text-xs font-semibold uppercase tracking-widest text-white/40">
             Bucket list
           </Text>
@@ -180,6 +184,46 @@ function SpaceView({ space }: { space: SharedSpace }) {
         </Text>
       }
     />
+  );
+}
+
+function ShareMapToggle({ spaceId }: { spaceId: string }) {
+  const shareTarget = useShareTarget();
+  const on = shareTarget === spaceId;
+  const [busy, setBusy] = useState(false);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await setMapSharing(spaceId, !on);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Glass>
+      <Pressable onPress={toggle} disabled={busy} className="flex-row items-center gap-3 p-4">
+        <Text className="text-2xl">🗺️</Text>
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-white">Share my map</Text>
+          <Text className="text-xs text-white/45">
+            {busy
+              ? 'Updating…'
+              : on
+                ? 'Your places & memories show on your partner’s map'
+                : 'Keep your places & memories private'}
+          </Text>
+        </View>
+        <View
+          className={`h-7 w-12 justify-center rounded-full px-0.5 ${
+            on ? 'bg-horizon-500' : 'bg-white/15'
+          }`}
+        >
+          <View className={`h-6 w-6 rounded-full bg-white ${on ? 'self-end' : 'self-start'}`} />
+        </View>
+      </Pressable>
+    </Glass>
   );
 }
 
