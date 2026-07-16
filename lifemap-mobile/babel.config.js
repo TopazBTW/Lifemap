@@ -13,9 +13,13 @@ module.exports = function (api) {
       // class members, and firebase v12 ships them untranspiled ("Runtime not
       // ready: SyntaxError: private properties not supported"). Transpile them
       // to WeakMap-based code. Keep until the device situation changes.
-      '@babel/plugin-transform-class-properties',
-      '@babel/plugin-transform-private-methods',
-      '@babel/plugin-transform-private-property-in-object',
+      //
+      // loose: true is required, not a preference: spec mode emits
+      // Object.defineProperty, which throws "property is not configurable"
+      // inside react-native's VirtualizedList. All three must agree on loose.
+      ['@babel/plugin-transform-class-properties', { loose: true }],
+      ['@babel/plugin-transform-private-methods', { loose: true }],
+      ['@babel/plugin-transform-private-property-in-object', { loose: true }],
     ],
   };
 };
