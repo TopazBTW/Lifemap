@@ -45,7 +45,12 @@ function createAuth(): Auth {
 
 function createDb(): Firestore {
   try {
-    return initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+    return initializeFirestore(app, {
+      // Forced, not auto-detected: the device's old RN runtime can't hold
+      // Firestore's WebChannel stream open ("Could not reach Cloud Firestore
+      // backend" 10s timeouts), and auto-detection missed it.
+      experimentalForceLongPolling: true,
+    });
   } catch {
     return getFirestore(app);
   }
