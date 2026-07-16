@@ -2,9 +2,14 @@
  * Public, bundle-safe configuration only.
  *
  * EXPO_PUBLIC_* values are inlined into the JS bundle and readable by anyone
- * who downloads the app — never put a secret here. The Gemini key lives in
- * Cloud Functions only. Maps are Apple/Google via react-native-maps and
- * geocoding is Nominatim — neither needs a client token.
+ * who downloads the app — never put a *secret* here. The Gemini key lives in
+ * Cloud Functions only.
+ *
+ * The Google Maps key is a deliberate, bounded exception: Google API keys are
+ * designed for client use and there's no server proxy on this stack (Cloud
+ * Functions need Blaze). Restrict it to the Places API and set a daily quota
+ * cap in Google Cloud so a scraped key can't run up a bill. Optional — the
+ * establishment search falls back to free Nominatim + Wikipedia without it.
  */
 
 function required(name: string, value: string | undefined): string {
@@ -43,4 +48,6 @@ export const env = {
       process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
     ),
   },
+  /** Optional. Present → establishment search uses Google Places. */
+  googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? null,
 } as const;

@@ -3,6 +3,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 
+import { useEnrichment } from '@/features/passport/enrich';
+import { useGooglePlaceDetails } from '@/features/passport/googlePlaces';
 import {
   deleteFoodEntry,
   deleteStayEntry,
@@ -11,6 +13,17 @@ import {
 } from '@/features/passport/usePassport';
 import type { FoodEntry, StayEntry } from '@/shared/types/domain';
 import { Button, Chip, EmptyState, Glass, Rating, Screen } from '@/shared/ui';
+
+/**
+ * The establishment's official photo, fetched **live** (Google by placeId,
+ * else Wikipedia by name) — never read from Firestore. React Query caches it
+ * per session so a scroll doesn't refetch.
+ */
+function useOfficialPhoto(googlePlaceId: string | null | undefined, name: string) {
+  const google = useGooglePlaceDetails(googlePlaceId);
+  const wiki = useEnrichment(googlePlaceId ? null : name);
+  return google.data?.photoUrls[0] ?? wiki.data?.imageUrl ?? null;
+}
 
 type Section = 'food' | 'stays';
 
@@ -83,13 +96,15 @@ function FoodPassport() {
 }
 
 function FoodCard({ entry }: { entry: FoodEntry }) {
-  const cover = entry.photos[0] ?? entry.enrichment?.coverImageUrl ?? null;
+  const official = useOfficialPhoto(entry.googlePlaceId, entry.restaurantName);
+  const banner = official ?? entry.photos[0] ?? null;
+  const strip = official ? entry.photos : entry.photos.slice(1);
   return (
     <Pressable onLongPress={() => confirmDelete(entry.restaurantName, () => deleteFoodEntry(entry.id))}>
       <Glass>
-        {cover ? (
+        {banner ? (
           <Image
-            source={{ uri: cover }}
+            source={{ uri: banner }}
             style={{ width: '100%', height: 160 }}
             contentFit="cover"
             transition={200}
@@ -110,7 +125,7 @@ function FoodCard({ entry }: { entry: FoodEntry }) {
               {entry.review}
             </Text>
           ) : null}
-          <PhotoStrip photos={entry.photos} />
+          <PhotoStrip photos={strip} />
         </View>
       </Glass>
     </Pressable>
@@ -142,13 +157,15 @@ function StayPassport() {
 }
 
 function StayCard({ entry }: { entry: StayEntry }) {
-  const cover = entry.photos[0] ?? entry.enrichment?.coverImageUrl ?? null;
+  const official = useOfficialPhoto(entry.googlePlaceId, entry.name);
+  const banner = official ?? entry.photos[0] ?? null;
+  const strip = official ? entry.photos : entry.photos.slice(1);
   return (
     <Pressable onLongPress={() => confirmDelete(entry.name, () => deleteStayEntry(entry.id))}>
       <Glass>
-        {cover ? (
+        {banner ? (
           <Image
-            source={{ uri: cover }}
+            source={{ uri: banner }}
             style={{ width: '100%', height: 160 }}
             contentFit="cover"
             transition={200}
@@ -169,19 +186,19 @@ function StayCard({ entry }: { entry: StayEntry }) {
               {entry.review}
             </Text>
           ) : null}
-          <PhotoStrip photos={entry.photos} />
+          <PhotoStrip photos={strip} />
         </View>
       </Glass>
     </Pressable>
   );
 }
 
-/** Extra user photos beyond the cover, in a small horizontal row. */
+/** The user's own photos, in a small horizontal row below the banner. */
 function PhotoStrip({ photos }: { photos: string[] }) {
-  if (photos.length <= 1) return null;
+  if (!photos.length) return null;
   return (
     <View className="flex-row gap-2 pt-1">
-      {photos.slice(1).map((uri) => (
+      {photos.map((uri) => (
         <Image
           key={uri}
           source={{ uri }}

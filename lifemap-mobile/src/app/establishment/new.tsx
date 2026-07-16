@@ -7,11 +7,16 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from '
 import { flagEmoji } from '@/features/map/geo';
 import { useEnrichment } from '@/features/passport/enrich';
 import {
+  hasGooglePlaces,
+  useGooglePlaceDetails,
+  useGooglePlaceSearch,
+} from '@/features/passport/googlePlaces';
+import {
   addFoodEntry,
   addStayEntry,
   type EstablishmentDraft,
 } from '@/features/passport/usePassport';
-import { usePlaceSearch, type PlaceHit } from '@/features/places/searchPlaces';
+import { usePlaceSearch } from '@/features/places/searchPlaces';
 import type { StayKind } from '@/shared/types/domain';
 import { Button, Chip, EmptyState, Glass, Input, Rating, Screen } from '@/shared/ui';
 
@@ -21,18 +26,33 @@ const STAY_KINDS: { value: StayKind; label: string }[] = [
   { value: 'hostel', label: '🛏️ Hostel' },
 ];
 
+/** Normalised result across the Google and Nominatim search backends. */
+type EstHit = {
+  key: string;
+  googlePlaceId: string | null;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  country: string | null;
+  city: string | null;
+};
+
 /**
  * Add a real establishment to the Food or Stay passport (`?kind=food|stay`).
- * Search finds the real place (Nominatim); enrichment pulls a public photo +
- * blurb (Wikipedia) shown alongside the user's own rating, review and photos.
+ * With a Google key, search + live photos come from Google Places; without one
+ * it falls back to free Nominatim search + Wikipedia enrichment. Either way,
+ * only a reference + the user's own review/photos are saved — official photos
+ * are fetched live.
  */
 export default function NewEstablishmentScreen() {
   const { kind } = useLocalSearchParams<{ kind: 'food' | 'stay' }>();
   const isFood = kind !== 'stay';
+  const google = hasGooglePlaces();
 
   const [input, setInput] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [picked, setPicked] = useState<PlaceHit | null>(null);
+  const [picked, setPicked] = useState<EstHit | null>(null);
 
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
@@ -47,8 +67,42 @@ export default function NewEstablishmentScreen() {
     return () => clearTimeout(t);
   }, [input]);
 
-  const search = usePlaceSearch(debounced);
-  const enrichment = useEnrichment(picked?.name ?? null);
+  // Both hooks are always called (rules of hooks); the inactive one is disabled
+  // by feeding it an empty query.
+  const gSearch = useGooglePlaceSearch(google ? debounced : '');
+  const nSearch = usePlaceSearch(google ? '' : debounced);
+
+  const results: EstHit[] = google
+    ? (gSearch.data ?? []).map((h) => ({
+        key: h.placeId,
+        googlePlaceId: h.placeId,
+        name: h.name,
+        address: h.address,
+        lat: h.lat,
+        lng: h.lng,
+        country: h.country,
+        city: h.city,
+      }))
+    : (nSearch.data ?? []).map((h) => ({
+        key: h.id,
+        googlePlaceId: null,
+        name: h.name,
+        address: h.displayName,
+        lat: h.lat,
+        lng: h.lng,
+        country: h.country,
+        city: h.city,
+      }));
+  const isFetching = google ? gSearch.isFetching : nSearch.isFetching;
+
+  // Live official info for the chosen place — Google when we have a placeId,
+  // Wikipedia otherwise. Never persisted.
+  const gDetails = useGooglePlaceDetails(picked?.googlePlaceId);
+  const wiki = useEnrichment(picked && !picked.googlePlaceId ? picked.name : null);
+
+  const officialPhoto = gDetails.data?.photoUrls[0] ?? wiki.data?.imageUrl ?? null;
+  const officialSummary = gDetails.data?.summary ?? wiki.data?.summary ?? null;
+  const officialLoading = gDetails.isFetching || wiki.isFetching;
 
   const pickPhotos = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -58,9 +112,7 @@ export default function NewEstablishmentScreen() {
       quality: 0.85,
     });
     if (result.canceled) return;
-    setPhotoUris((prev) =>
-      [...prev, ...result.assets.map((a) => a.uri)].slice(0, 3),
-    );
+    setPhotoUris((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, 3));
   };
 
   const save = async () => {
@@ -73,16 +125,11 @@ export default function NewEstablishmentScreen() {
         rating,
         review: review.trim() || undefined,
         photoUris,
+        googlePlaceId: picked.googlePlaceId,
+        address: picked.address,
         coordinates: { lat: picked.lat, lng: picked.lng },
         country: picked.country,
         city: picked.city,
-        enrichment: enrichment.data
-          ? {
-              coverImageUrl: enrichment.data.imageUrl,
-              summary: enrichment.data.summary,
-              address: picked.displayName,
-            }
-          : { coverImageUrl: null, summary: null, address: picked.displayName },
         dish: isFood ? dish : undefined,
         kind: isFood ? undefined : stayKind,
       };
@@ -112,11 +159,14 @@ export default function NewEstablishmentScreen() {
             autoFocus
             autoCorrect={false}
           />
+          <Text className="text-xs text-white/35">
+            {google ? 'Powered by Google Maps' : 'Powered by OpenStreetMap'}
+          </Text>
         </View>
 
         <FlatList
-          data={search.data ?? []}
-          keyExtractor={(hit) => hit.id}
+          data={results}
+          keyExtractor={(hit) => hit.key}
           contentContainerClassName="gap-2 pb-10"
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
@@ -128,14 +178,14 @@ export default function NewEstablishmentScreen() {
                     {item.name}
                   </Text>
                   <Text className="text-xs text-white/45" numberOfLines={1}>
-                    {item.displayName}
+                    {item.address}
                   </Text>
                 </View>
               </Glass>
             </Pressable>
           )}
           ListEmptyComponent={
-            search.isFetching ? (
+            isFetching ? (
               <View className="items-center py-10">
                 <ActivityIndicator color="white" />
               </View>
@@ -149,7 +199,7 @@ export default function NewEstablishmentScreen() {
               <EmptyState
                 emoji={isFood ? '🍽️' : '🏨'}
                 title="Find the real place"
-                body="Search by name and we’ll pull its location and a photo where one exists. Type at least 3 letters."
+                body="Search by name and we’ll pull its location and photo live. Type at least 3 letters."
               />
             )
           }
@@ -169,11 +219,12 @@ export default function NewEstablishmentScreen() {
           <Text className="text-sm text-horizon-300">‹ Search again</Text>
         </Pressable>
 
-        {/* The "extracted" card: real place + public photo/blurb where found. */}
+        {/* Live official card — photo/summary fetched from Google/Wikipedia,
+            shown for context but never saved. */}
         <Glass>
-          {enrichment.data?.imageUrl ? (
+          {officialPhoto ? (
             <Image
-              source={{ uri: enrichment.data.imageUrl }}
+              source={{ uri: officialPhoto }}
               style={{ width: '100%', height: 180 }}
               contentFit="cover"
               transition={200}
@@ -185,24 +236,25 @@ export default function NewEstablishmentScreen() {
               {picked.name}
             </Text>
             <Text className="text-xs text-white/45" numberOfLines={2}>
-              {picked.displayName}
+              {picked.address}
             </Text>
-            {enrichment.isFetching ? (
-              <Text className="pt-1 text-xs text-white/35">Looking up details…</Text>
-            ) : enrichment.data?.summary ? (
+            {officialLoading ? (
+              <Text className="pt-1 text-xs text-white/35">Looking it up…</Text>
+            ) : officialSummary ? (
               <Text className="pt-1 text-xs leading-4 text-white/55" numberOfLines={4}>
-                {enrichment.data.summary}
+                {officialSummary}
               </Text>
-            ) : (
-              <Text className="pt-1 text-xs text-white/35">
-                No public listing found — your review below is the record.
-              </Text>
-            )}
+            ) : null}
           </View>
         </Glass>
 
         {isFood ? (
-          <Input label="Dish (optional)" placeholder="What did you order?" value={dish} onChangeText={setDish} />
+          <Input
+            label="Dish (optional)"
+            placeholder="What did you order?"
+            value={dish}
+            onChangeText={setDish}
+          />
         ) : (
           <View className="gap-2">
             <Text className="text-xs font-medium uppercase tracking-wider text-white/50">

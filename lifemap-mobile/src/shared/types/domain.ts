@@ -147,30 +147,21 @@ export type Memory = {
 
 // ─── Passports ───────────────────────────────────────────────────────────────
 
-/** Enrichment pulled from a public source (Wikipedia) — "extracted" info, kept
- * separate from the user's own photos/review so the UI can show them side by
- * side. Null when the establishment isn't notable enough to have a page. */
-export type PlaceEnrichment = {
-  coverImageUrl: string | null;
-  summary: string | null;
-  address: string | null;
-};
-
 export type FoodEntry = {
   id: string;
   ownerId: string;
   restaurantName: string;
   dish?: string | null;
   rating: number; // 1–5
-  priceLevel?: 1 | 2 | 3 | 4 | null;
   review?: string | null;
   /** The user's own photos, compressed inline (data URIs). */
   photos: string[];
-  enrichment?: PlaceEnrichment | null;
+  /** Reference only — official photo/summary are fetched live, never stored. */
+  googlePlaceId?: string | null;
+  address?: string | null;
   coordinates?: Coordinates | null;
   country?: CountryCode | null;
   city?: string | null;
-  placeId?: string | null;
   sharedSpaceId?: string | null;
   visitedAt: Timestamp;
   createdAt: Timestamp;
@@ -188,11 +179,12 @@ export type StayEntry = {
   review?: string | null;
   /** The user's own photos, compressed inline (data URIs). */
   photos: string[];
-  enrichment?: PlaceEnrichment | null;
+  /** Reference only — official photo/summary are fetched live, never stored. */
+  googlePlaceId?: string | null;
+  address?: string | null;
   coordinates?: Coordinates | null;
   country?: CountryCode | null;
   city?: string | null;
-  placeId?: string | null;
   sharedSpaceId?: string | null;
   checkIn: Timestamp;
   checkOut?: Timestamp | null;

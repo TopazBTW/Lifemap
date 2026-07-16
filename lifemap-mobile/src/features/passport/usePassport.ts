@@ -18,7 +18,6 @@ import { compressToDataUri } from '@/shared/lib/image';
 import type {
   Coordinates,
   FoodEntry,
-  PlaceEnrichment,
   StayEntry,
   StayKind,
 } from '@/shared/types/domain';
@@ -64,10 +63,12 @@ export type EstablishmentDraft = {
   review?: string;
   /** Local URIs of the user's own photos; compressed on save. */
   photoUris: string[];
+  /** Reference to the real place — official photos are fetched live from this. */
+  googlePlaceId?: string | null;
+  address?: string | null;
   coordinates?: Coordinates | null;
   country?: string | null;
   city?: string | null;
-  enrichment?: PlaceEnrichment | null;
   /** Food only. */
   dish?: string;
   /** Stay only. */
@@ -95,11 +96,11 @@ export async function addFoodEntry(draft: EstablishmentDraft): Promise<void> {
     rating: draft.rating,
     review: draft.review?.trim() || null,
     photos,
-    enrichment: draft.enrichment ?? null,
+    googlePlaceId: draft.googlePlaceId ?? null,
+    address: draft.address ?? null,
     coordinates: draft.coordinates ?? null,
     country: draft.country?.toUpperCase() || null,
     city: draft.city || null,
-    placeId: null,
     sharedSpaceId: null,
     visitedAt: Timestamp.now(),
     createdAt: serverTimestamp(),
@@ -118,11 +119,11 @@ export async function addStayEntry(draft: EstablishmentDraft): Promise<void> {
     rating: draft.rating,
     review: draft.review?.trim() || null,
     photos,
-    enrichment: draft.enrichment ?? null,
+    googlePlaceId: draft.googlePlaceId ?? null,
+    address: draft.address ?? null,
     coordinates: draft.coordinates ?? null,
     country: draft.country?.toUpperCase() || null,
     city: draft.city || null,
-    placeId: null,
     sharedSpaceId: null,
     checkIn: Timestamp.now(),
     checkOut: null,

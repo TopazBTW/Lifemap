@@ -133,6 +133,13 @@ in-memory persistence and silently signs users out on every cold start.
   provide). Maps are `react-native-maps` (Apple Maps on iOS — bundled in Expo
   Go, no token); geocoding is Nominatim in `functions/src/geocode.ts` (1 req/s
   throttle + User-Agent are load-bearing, not optional).
+- **Google Places (New) IS used** for establishment search + photos — the owner
+  has Google billing (unlike Mapbox). Key is `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`
+  (optional; falls back to Nominatim + Wikipedia when absent). It ships in the
+  bundle — must be restricted to Places API + a daily quota cap, since there's
+  no Cloud Function proxy on the free tier. **Never persist Google photos or
+  details** (ToS forbids it, URLs expire): store only `googlePlaceId` + the
+  user's own review/photos, fetch photos live via `useGooglePlaceDetails`.
 - **GeoJSON is `[lng, lat]`.** Use `toGeoJSONPosition()` from
   `src/shared/types/domain.ts`. Swapping these puts pins in the ocean.
 - **Country fills render only rollup countries** as native `<Polygon>` overlays
