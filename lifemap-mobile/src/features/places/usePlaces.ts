@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -11,9 +12,14 @@ import {
 import { useMemo } from 'react';
 
 import { useSession } from '@/features/auth/session';
-import { db } from '@/shared/lib/firebase';
+import { auth, db } from '@/shared/lib/firebase';
 import { useLiveCollection } from '@/shared/lib/firestore-live';
-import type { Place, PlaceStatus } from '@/shared/types/domain';
+import type {
+  Coordinates,
+  Place,
+  PlaceKind,
+  PlaceStatus,
+} from '@/shared/types/domain';
 
 export function usePlaces() {
   const user = useSession((s) => s.user);
@@ -33,6 +39,32 @@ export function usePlaces() {
     ...(data as Omit<Place, 'id'>),
     id,
   }));
+}
+
+/** Manually add a place to the map (the free-tier path — no reel pipeline). */
+export async function addPlace(args: {
+  name: string;
+  kind: PlaceKind;
+  status: PlaceStatus;
+  coordinates: Coordinates;
+  country: string;
+  city?: string | null;
+}) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in.');
+  await addDoc(collection(db, 'places'), {
+    ownerId: uid,
+    name: args.name,
+    kind: args.kind,
+    status: args.status,
+    coordinates: args.coordinates,
+    country: args.country.toUpperCase(),
+    city: args.city ?? null,
+    tags: [],
+    sourceReelId: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** Status changes drive the rollup (visited > planned > saved). */

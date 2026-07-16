@@ -1,9 +1,12 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
+import { CountrySheet } from '@/features/map/CountrySheet';
+import { countryAt } from '@/features/map/geo';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
 import { KIND_EMOJI } from '@/features/places/kinds';
@@ -13,15 +16,16 @@ import { Glass } from '@/shared/ui';
 
 /**
  * World Life Map on react-native-maps (Apple Maps on iOS) — runs in Expo Go
- * with no API keys. Country fills come from the server-maintained rollup,
- * rendered as native polygon overlays for just the countries the user has
- * touched (see countryPaint.ts).
+ * with no API keys. Country fills derive on-device from the user's data
+ * (see useCountryRollup); tapping a country opens its status sheet, tapping
+ * a pin opens the place sheet.
  */
 export default function WorldMapScreen() {
   const insets = useSafeAreaInsets();
   const { data: places = [] } = usePlaces();
   const { data: rollup } = useCountryRollup();
-  const [selected, setSelected] = useState<Place | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
   const fills = useMemo(() => countryFills(rollup), [rollup]);
 
@@ -44,7 +48,20 @@ export default function WorldMapScreen() {
           latitudeDelta: 100,
           longitudeDelta: 120,
         }}
-        onPress={() => setSelected(null)}
+        onPress={(e) => {
+          // A pin tap also fires the map press on iOS; the marker handler
+          // runs first and sets selectedPlace — don't fight it.
+          if (selectedPlace) {
+            setSelectedPlace(null);
+            return;
+          }
+          if (selectedCountry) {
+            setSelectedCountry(null);
+            return;
+          }
+          const { latitude, longitude } = e.nativeEvent.coordinate;
+          setSelectedCountry(countryAt(latitude, longitude));
+        }}
         showsPointsOfInterest={false}
         toolbarEnabled={false}
         rotateEnabled={false}
@@ -58,6 +75,7 @@ export default function WorldMapScreen() {
             fillColor={fill.color}
             strokeColor="rgba(255,255,255,0.18)"
             strokeWidth={1}
+            tappable={false}
           />
         ))}
 
@@ -73,7 +91,8 @@ export default function WorldMapScreen() {
             tracksViewChanges={false}
             onPress={(e) => {
               e.stopPropagation();
-              setSelected(place);
+              setSelectedCountry(null);
+              setSelectedPlace(place);
             }}
           >
             <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
@@ -97,10 +116,28 @@ export default function WorldMapScreen() {
             </View>
           </View>
         </Glass>
+        <Text className="pt-2 text-center text-xs text-white/40">
+          Tap a country to mark it · tap a pin for details
+        </Text>
       </View>
 
-      {selected ? (
-        <PlaceSheet place={selected} onClose={() => setSelected(null)} />
+      {/* Add place FAB */}
+      <Pressable
+        onPress={() => router.push('/place/new')}
+        className="absolute bottom-28 right-5 h-14 w-14 items-center justify-center rounded-full bg-horizon-500 shadow-lg"
+        accessibilityLabel="Add a place"
+      >
+        <Text className="text-2xl text-white">＋</Text>
+      </Pressable>
+
+      {selectedPlace ? (
+        <PlaceSheet place={selectedPlace} onClose={() => setSelectedPlace(null)} />
+      ) : selectedCountry ? (
+        <CountrySheet
+          iso={selectedCountry}
+          entry={rollup?.countries[selectedCountry] ?? null}
+          onClose={() => setSelectedCountry(null)}
+        />
       ) : null}
     </View>
   );

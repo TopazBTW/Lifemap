@@ -138,6 +138,15 @@ service cloud.firestore {
       allow delete: if owns(resource);
     }
 
+    // ─── Country marks ──────────────────────────────────────────────────────
+    // One doc per user: { countries: { ISO: 'visited' | 'planned' } }.
+    // Client-writable by design — this is the user's own declaration of where
+    // they've been, and on the free tier (no Cloud Functions) the world-map
+    // rollup is derived on-device from this plus places/memories/runs.
+    match /countryMarks/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+    }
+
     // ─── Server-maintained projections ──────────────────────────────────────
     // Read-only to clients: written exclusively by Cloud Functions. If a client
     // could write these it could paint any country visited, and the timeline

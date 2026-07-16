@@ -254,7 +254,14 @@ export type TimelineEntry = {
   occurredAt: Timestamp;
 };
 
-// ─── Rollups (server-maintained, read-only) ──────────────────────────────────
+// ─── Country marks (user-declared, client-writable) ─────────────────────────
+
+/** The user's own "I've been here / I'm going" declarations, keyed by ISO. */
+export type CountryMarks = {
+  countries: Record<CountryCode, 'visited' | 'planned'>;
+};
+
+// ─── Rollups (derived on-device on the free tier) ────────────────────────────
 
 export type CountryStatus = 'visited' | 'planned' | 'saved' | 'none';
 
