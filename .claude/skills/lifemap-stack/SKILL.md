@@ -23,6 +23,13 @@ https://docs.expo.dev/versions/v54.0.0/. Consequences:
   with "Cannot find module 'babel-preset-expo'" otherwise.
 - Only Expo-Go-bundled native modules are usable: react-native-maps yes,
   @rnmapbox/maps or any custom native module no.
+- **The device's Hermes cannot parse `#private` class members** ("Runtime not
+  ready: SyntaxError: private properties not supported" on boot). firebase v12
+  ships them untranspiled, and the `hermes-stable` transform profile keeps
+  them. `babel.config.js` adds the three `@babel/plugin-transform-*` private
+  plugins to strip them — do not remove, and re-verify with
+  `grep -cE '\.#[a-zA-Z]' <bundle>` against the hermes-profile bundle after
+  any babel/firebase change.
 
 ## Free-tier-only Firebase (no Blaze, no bank card)
 
