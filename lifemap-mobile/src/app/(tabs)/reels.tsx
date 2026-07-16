@@ -1,45 +1,161 @@
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 
-import { useImportReel, useReels } from '@/features/reels/useReels';
-import type { Reel, ReelStatus } from '@/shared/types/domain';
+import { countryName, flagEmoji } from '@/features/map/geo';
+import { KIND_EMOJI } from '@/features/places/kinds';
+import { addPlace } from '@/features/places/usePlaces';
+import {
+  detectPlatform,
+  extractPlacesFromCaption,
+  hasGemini,
+  resolveCaption,
+  type ExtractedPlace,
+} from '@/features/reels/extract';
 import { Button, EmptyState, Glass, Input, Screen } from '@/shared/ui';
 
-const STATUS_BADGE: Record<ReelStatus, { label: string; className: string }> = {
-  pending: { label: 'Queued', className: 'bg-white/10 text-white/60' },
-  extracting: { label: 'Extracting…', className: 'bg-horizon-500/25 text-horizon-300' },
-  needs_review: { label: 'Review places', className: 'bg-planned/25 text-planned' },
-  ready: { label: 'On your map', className: 'bg-visited/25 text-visited' },
-  failed: { label: 'Failed', className: 'bg-red-500/20 text-red-400' },
-};
-
-const PLATFORM_ICON: Record<string, string> = {
-  instagram: '📷',
-  tiktok: '🎵',
-  youtube: '▶️',
-  unknown: '🔗',
-};
+type Step = 'input' | 'extracting' | 'review';
 
 export default function ReelsScreen() {
-  const { data: reels = [], isLoading } = useReels();
-  const importReel = useImportReel();
+  const [step, setStep] = useState<Step>('input');
   const [url, setUrl] = useState('');
+  const [caption, setCaption] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [places, setPlaces] = useState<ExtractedPlace[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
 
-  const submit = () => {
+  const enabled = hasGemini();
+
+  const fetchCaption = async () => {
     setError(null);
-    importReel.mutate(url, {
-      onSuccess: () => setUrl(''),
-      onError: (err) => setError(err instanceof Error ? err.message : 'Import failed.'),
-    });
+    if (detectPlatform(url) === 'unknown') {
+      setError('Paste an Instagram, TikTok or YouTube link.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const resolved = await resolveCaption(url);
+      if (resolved.caption) setCaption(resolved.caption);
+      else
+        setError(
+          'Could not read this post automatically — paste its caption below.',
+        );
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const extract = async () => {
+    setError(null);
+    setStep('extracting');
+    try {
+      const result = await extractPlacesFromCaption(caption.trim());
+      if (!result.length) {
+        setError('No identifiable places found. Try a caption that names spots.');
+        setStep('input');
+        return;
+      }
+      setPlaces(result);
+      // Pre-select the located, confident ones.
+      setSelected(
+        new Set(
+          result
+            .map((p, i) => (p.coordinates && p.confidence >= 0.5 ? i : -1))
+            .filter((i) => i >= 0),
+        ),
+      );
+      setStep('review');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Extraction failed.');
+      setStep('input');
+    }
+  };
+
+  const commit = async () => {
+    setBusy(true);
+    try {
+      for (const [i, p] of places.entries()) {
+        if (!selected.has(i) || !p.coordinates || !p.country) continue;
+        await addPlace({
+          name: p.name,
+          kind: p.kind,
+          status: 'saved',
+          coordinates: p.coordinates,
+          country: p.country,
+          city: p.city,
+        });
+      }
+      reset();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reset = () => {
+    setStep('input');
+    setUrl('');
+    setCaption('');
+    setPlaces([]);
+    setSelected(new Set());
+    setError(null);
+  };
+
+  if (!enabled) {
+    return (
+      <Screen>
+        <Text className="pb-4 pt-2 text-3xl font-bold text-white">Reel to Reality</Text>
+        <EmptyState
+          emoji="🎬"
+          title="One free key away"
+          body="Reel extraction uses the free Gemini API. Grab a key at aistudio.google.com (no card) and I'll switch it on."
+        />
+      </Screen>
+    );
+  }
+
+  if (step === 'review') {
+    const chosen = places.filter((_, i) => selected.has(i));
+    return (
+      <Screen>
+        <View className="gap-1 pb-4 pt-2">
+          <Text className="text-3xl font-bold text-white">Found {places.length}</Text>
+          <Text className="text-sm text-white/50">Pick the places to drop on your map.</Text>
+        </View>
+        <FlatList
+          data={places}
+          keyExtractor={(_, i) => String(i)}
+          contentContainerClassName="gap-3 pb-4"
+          renderItem={({ item, index }) => (
+            <ExtractedCard
+              place={item}
+              selected={selected.has(index)}
+              onToggle={() =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  next.has(index) ? next.delete(index) : next.add(index);
+                  return next;
+                })
+              }
+            />
+          )}
+        />
+        <View className="gap-2 pb-8 pt-2">
+          <Button
+            title={chosen.length ? `Add ${chosen.length} to my map` : 'Select places'}
+            disabled={!chosen.length}
+            loading={busy}
+            onPress={commit}
+          />
+          <Button title="Start over" variant="ghost" size="sm" onPress={reset} />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
-      <View className="gap-4 pb-4 pt-2">
-        <Text className="text-3xl font-bold text-white">Reel to Reality</Text>
+      <Text className="pb-4 pt-2 text-3xl font-bold text-white">Reel to Reality</Text>
+      <View className="gap-4">
         <Glass>
           <View className="gap-3 p-4">
             <Input
@@ -49,73 +165,82 @@ export default function ReelsScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-              error={error}
             />
             <Button
-              title="Extract places with AI"
-              onPress={submit}
-              loading={importReel.isPending}
+              title="Read caption"
+              variant="ghost"
+              size="sm"
+              loading={busy}
               disabled={!url.trim()}
+              onPress={fetchCaption}
             />
           </View>
         </Glass>
-      </View>
 
-      <FlatList
-        data={reels}
-        keyExtractor={(r) => r.id}
-        contentContainerClassName="gap-3 pb-32"
-        renderItem={({ item }) => <ReelCard reel={item} />}
-        ListEmptyComponent={
-          isLoading ? null : (
-            <EmptyState
-              emoji="🎬"
-              title="No reels yet"
-              body="Paste a travel reel above and AI will pull out every hotel, restaurant and beach onto your map."
-            />
-          )
-        }
-      />
+        <Input
+          label="Caption / description"
+          placeholder="Paste or edit the post's caption — the more it names places, the better."
+          value={caption}
+          onChangeText={setCaption}
+          multiline
+          numberOfLines={6}
+          className="min-h-32"
+          textAlignVertical="top"
+          error={error}
+        />
+
+        <Button
+          title={step === 'extracting' ? 'Extracting places…' : 'Extract places with AI'}
+          loading={step === 'extracting'}
+          disabled={caption.trim().length < 8}
+          onPress={extract}
+        />
+        <Text className="text-center text-xs text-white/35">
+          Instagram captions can’t be read automatically — paste them here.
+        </Text>
+      </View>
     </Screen>
   );
 }
 
-function ReelCard({ reel }: { reel: Reel }) {
-  const badge = STATUS_BADGE[reel.status];
-  const tappable = reel.status === 'needs_review' || reel.status === 'failed';
-
+function ExtractedCard({
+  place,
+  selected,
+  onToggle,
+}: {
+  place: ExtractedPlace;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const unlocated = !place.coordinates;
   return (
-    <Pressable
-      disabled={!tappable}
-      onPress={() => router.push({ pathname: '/reel/[id]', params: { id: reel.id } })}
-    >
+    <Pressable onPress={onToggle} disabled={unlocated}>
       <Glass>
-        <View className="flex-row items-center gap-3 p-4">
-          {reel.thumbnailUrl ? (
-            <Image
-              source={{ uri: reel.thumbnailUrl }}
-              style={{ width: 56, height: 56, borderRadius: 12 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View className="h-14 w-14 items-center justify-center rounded-xl bg-white/10">
-              <Text className="text-2xl">{PLATFORM_ICON[reel.platform]}</Text>
-            </View>
-          )}
-          <View className="flex-1 gap-1">
-            <Text className="text-sm font-semibold text-white" numberOfLines={1}>
-              {reel.title ?? reel.url}
+        <View
+          className={`flex-row items-center gap-3 rounded-card border p-4 ${
+            selected ? 'border-horizon-400/70' : 'border-transparent'
+          } ${unlocated ? 'opacity-50' : ''}`}
+        >
+          <Text className="text-2xl">{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+          <View className="flex-1 gap-0.5">
+            <Text className="text-sm font-semibold text-white">{place.name}</Text>
+            <Text className="text-xs text-white/45">
+              {place.country ? `${flagEmoji(place.country)} ` : ''}
+              {[place.city, place.country ? countryName(place.country) : null]
+                .filter(Boolean)
+                .join(', ') || 'Location unknown'}
             </Text>
-            <Text className="text-xs text-white/40" numberOfLines={1}>
-              {reel.authorHandle ?? reel.platform}
-              {reel.placeIds?.length ? ` · ${reel.placeIds.length} places` : ''}
-            </Text>
+            {unlocated ? (
+              <Text className="text-xs text-planned">Couldn’t locate — can’t map this one</Text>
+            ) : null}
           </View>
-          <Text
-            className={`overflow-hidden rounded-pill px-2.5 py-1 text-[11px] font-semibold ${badge.className}`}
+          <View
+            className={`h-6 w-6 items-center justify-center rounded-full border-2 ${
+              selected ? 'border-horizon-400 bg-horizon-500' : 'border-white/25'
+            }`}
           >
-            {badge.label}
-          </Text>
+            {selected ? <Text className="text-xs text-white">✓</Text> : null}
+          </View>
         </View>
       </Glass>
     </Pressable>

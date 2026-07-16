@@ -64,6 +64,14 @@ export function usePlaceSearch(query: string) {
   });
 }
 
+/** Non-hook single-result geocode — for the reel extraction pipeline. */
+export async function geocodeViaNominatim(
+  query: string,
+): Promise<PlaceHit | null> {
+  const hits = await searchNominatim(query);
+  return hits[0] ?? null;
+}
+
 /**
  * Coordinates → country/city, via Nominatim reverse geocoding (free, keyless).
  * Used so a memory tagged with the phone's GPS still colours its country on

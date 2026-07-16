@@ -39,10 +39,6 @@ export default function RootLayout() {
           <Stack.Protected guard={!!user}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
-              name="reel/[id]"
-              options={{ presentation: 'modal' }}
-            />
-            <Stack.Screen
               name="memory/new"
               options={{ presentation: 'modal' }}
             />

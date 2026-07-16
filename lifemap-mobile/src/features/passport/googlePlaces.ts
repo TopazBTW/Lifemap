@@ -79,6 +79,15 @@ async function searchText(query: string): Promise<GooglePlaceHit[]> {
   });
 }
 
+/** Non-hook single-result geocode — for the reel extraction pipeline. */
+export async function geocodeViaGoogle(
+  query: string,
+): Promise<GooglePlaceHit | null> {
+  if (!env.googleMapsApiKey) return null;
+  const hits = await searchText(query);
+  return hits[0] ?? null;
+}
+
 export function useGooglePlaceSearch(query: string) {
   const q = query.trim();
   return useQuery({

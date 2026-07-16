@@ -38,9 +38,13 @@ The owner will not attach billing. Therefore:
 - **No Firebase Storage.** Memory photos are compressed (900px, q0.55, ≤3) and
   stored **inline in the Firestore doc as data URIs** — see
   `src/features/memories/useMemories.ts`. Keep docs under 1 MiB.
-- **Cloud Functions v2 cannot be deployed** (needs Blaze). The reel-extraction
-  pipeline exists in `functions/` but is dormant; reels stay `pending` until
-  the project gets Blaze or the pipeline moves elsewhere.
+- **Cloud Functions v2 cannot be deployed** (needs Blaze). The `functions/`
+  pipeline is dormant. **Reel extraction was ported client-side** to
+  `src/features/reels/extract.ts`: free Gemini key
+  (`EXPO_PUBLIC_GEMINI_API_KEY` from aistudio.google.com) extracts place names
+  from oEmbed captions (TikTok/YouTube keyless; Instagram = paste caption),
+  then geocode via Google Places/Nominatim and write places directly. The old
+  Firestore-reel-doc + `commitReelPlaces` flow and `reel/[id]` screen are gone.
 
 ## SDK 57 notes (dormant — only relevant if the device situation changes)
 

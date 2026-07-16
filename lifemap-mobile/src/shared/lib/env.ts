@@ -50,4 +50,6 @@ export const env = {
   },
   /** Optional. Present → establishment search uses Google Places. */
   googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? null,
+  /** Optional. Free key from aistudio.google.com — enables reel extraction. */
+  geminiApiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? null,
 } as const;
