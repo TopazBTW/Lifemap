@@ -171,11 +171,31 @@ type RawPlace = {
   confidence: number;
 };
 
-const userPrompt = (caption: string) =>
-  `Extract every identifiable place:\n\n${caption}`;
+const userPrompt = (caption: string, hasImage: boolean) =>
+  hasImage
+    ? `Analyse this reel's cover frame AND caption, and extract every identifiable place shown or named.${
+        caption ? `\n\nCaption:\n${caption}` : '\n\n(No caption — go by the image.)'
+      }`
+    : `Extract every identifiable place:\n\n${caption}`;
 
-/** Mistral (La Plateforme) chat completions in JSON mode — the user's provider. */
-async function extractViaMistral(caption: string): Promise<RawPlace[]> {
+/**
+ * Mistral (La Plateforme) in JSON mode. When a cover image is available it
+ * goes to the multimodal model so the model reads the *visuals* — landmarks,
+ * signage, scenery — not just the caption. This is as close to "analyse the
+ * reel" as a free client-only app gets (no way to pull the full video frames
+ * from IG/TikTok in Expo Go).
+ */
+async function extractViaMistral(
+  caption: string,
+  imageUrl?: string | null,
+): Promise<RawPlace[]> {
+  const userContent = imageUrl
+    ? [
+        { type: 'text', text: userPrompt(caption, true) },
+        { type: 'image_url', image_url: imageUrl },
+      ]
+    : userPrompt(caption, false);
+
   const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -183,15 +203,16 @@ async function extractViaMistral(caption: string): Promise<RawPlace[]> {
       Authorization: `Bearer ${env.mistralApiKey}`,
     },
     body: JSON.stringify({
+      // mistral-small is multimodal — handles both the image and JSON mode.
       model: 'mistral-small-latest',
       temperature: 0.1,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: `${SYSTEM}\n\n${JSON_SHAPE}` },
-        { role: 'user', content: userPrompt(caption) },
+        { role: 'user', content: userContent },
       ],
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(40000),
   });
 
   if (!res.ok) {
@@ -212,8 +233,24 @@ async function extractViaMistral(caption: string): Promise<RawPlace[]> {
   return parsed.places ?? [];
 }
 
-/** Gemini generateContent with a response schema. */
-async function extractViaGemini(caption: string): Promise<RawPlace[]> {
+/**
+ * Gemini generateContent with a response schema. For a YouTube URL, Gemini can
+ * watch the **actual video** (fileData) — true full-video analysis, the one
+ * case where that's possible for free.
+ */
+async function extractViaGemini(
+  caption: string,
+  videoUrl?: string | null,
+): Promise<RawPlace[]> {
+  const parts: Record<string, unknown>[] = [
+    {
+      text: videoUrl
+        ? 'Watch this video and extract every identifiable place shown or named.'
+        : userPrompt(caption, false),
+    },
+  ];
+  if (videoUrl) parts.push({ fileData: { fileUri: videoUrl, mimeType: 'video/*' } });
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.geminiApiKey}`,
     {
@@ -221,14 +258,14 @@ async function extractViaGemini(caption: string): Promise<RawPlace[]> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt(caption) }] }],
+        contents: [{ role: 'user', parts }],
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: geminiSchema,
           temperature: 0.1,
         },
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(60000),
     },
   );
 
@@ -250,11 +287,43 @@ async function extractViaGemini(caption: string): Promise<RawPlace[]> {
   return parsed.places ?? [];
 }
 
-/** Pick a provider by which key is set — Mistral wins when both are. */
-async function extractNames(caption: string): Promise<RawPlace[]> {
-  if (env.mistralApiKey) return extractViaMistral(caption);
-  if (env.geminiApiKey) return extractViaGemini(caption);
+/**
+ * Pick a provider by which key is set — Mistral wins when both are.
+ * `imageUrl` = cover frame (Mistral vision); `youtubeUrl` = full-video analysis
+ * when Gemini handles a YouTube link.
+ */
+async function extractNames(
+  caption: string,
+  imageUrl?: string | null,
+  youtubeUrl?: string | null,
+): Promise<RawPlace[]> {
+  if (env.mistralApiKey) return extractViaMistral(caption, imageUrl);
+  if (env.geminiApiKey) return extractViaGemini(caption, youtubeUrl);
   throw new Error('Add a Mistral or Gemini key to enable reel extraction.');
+}
+
+/**
+ * Fetch a thumbnail and inline it as a base64 data URI.
+ *
+ * We can't just hand Mistral the remote URL: Instagram/TikTok cover images are
+ * hotlink-protected and Mistral's server-side fetch fails on them. Downloading
+ * in-app (which carries our headers) and sending base64 is reliable.
+ */
+async function imageUrlToDataUri(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () =>
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
 }
 
 const KIND_SET = new Set<string>(PLACE_KINDS);
@@ -265,10 +334,19 @@ const KIND_SET = new Set<string>(PLACE_KINDS);
  * geocode fetches). Places that can't be located keep null coordinates and are
  * flagged low-confidence for the review screen.
  */
-export async function extractPlacesFromCaption(
-  caption: string,
-): Promise<ExtractedPlace[]> {
-  const names = await extractNames(caption);
+export async function extractPlacesFromReel(input: {
+  caption: string;
+  /** Cover frame — analysed by the vision model. */
+  imageUrl?: string | null;
+  /** YouTube URL — analysed as full video when Gemini is the provider. */
+  youtubeUrl?: string | null;
+}): Promise<ExtractedPlace[]> {
+  // Inline the cover frame as base64 for the vision model (see helper).
+  const imageData = input.imageUrl
+    ? await imageUrlToDataUri(input.imageUrl)
+    : null;
+
+  const names = await extractNames(input.caption, imageData, input.youtubeUrl);
   const out: ExtractedPlace[] = [];
 
   for (const raw of names) {

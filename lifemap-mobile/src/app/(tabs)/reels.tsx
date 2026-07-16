@@ -6,7 +6,7 @@ import { KIND_EMOJI } from '@/features/places/kinds';
 import { addPlace } from '@/features/places/usePlaces';
 import {
   detectPlatform,
-  extractPlacesFromCaption,
+  extractPlacesFromReel,
   hasExtractor,
   resolveCaption,
   type ExtractedPlace,
@@ -19,6 +19,7 @@ export default function ReelsScreen() {
   const [step, setStep] = useState<Step>('input');
   const [url, setUrl] = useState('');
   const [caption, setCaption] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [places, setPlaces] = useState<ExtractedPlace[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -35,11 +36,10 @@ export default function ReelsScreen() {
     setBusy(true);
     try {
       const resolved = await resolveCaption(url);
+      setThumbnailUrl(resolved.thumbnailUrl);
       if (resolved.caption) setCaption(resolved.caption);
-      else
-        setError(
-          'Could not read this post automatically — paste its caption below.',
-        );
+      if (!resolved.caption && !resolved.thumbnailUrl)
+        setError('Could not read this post — paste its caption below.');
     } finally {
       setBusy(false);
     }
@@ -49,9 +49,21 @@ export default function ReelsScreen() {
     setError(null);
     setStep('extracting');
     try {
-      const result = await extractPlacesFromCaption(caption.trim());
+      // Pull a fresh cover frame if we don't have one yet (vision input).
+      let cover = thumbnailUrl;
+      const platform = detectPlatform(url);
+      if (!cover && platform !== 'unknown') {
+        const resolved = await resolveCaption(url);
+        cover = resolved.thumbnailUrl;
+        setThumbnailUrl(cover);
+      }
+      const result = await extractPlacesFromReel({
+        caption: caption.trim(),
+        imageUrl: cover,
+        youtubeUrl: platform === 'youtube' ? url : null,
+      });
       if (!result.length) {
-        setError('No identifiable places found. Try a caption that names spots.');
+        setError('No places found. Try a clearer reel or add its caption.');
         setStep('input');
         return;
       }
@@ -95,10 +107,13 @@ export default function ReelsScreen() {
     setStep('input');
     setUrl('');
     setCaption('');
+    setThumbnailUrl(null);
     setPlaces([]);
     setSelected(new Set());
     setError(null);
   };
+
+  const canExtract = caption.trim().length >= 8 || !!thumbnailUrl || !!url.trim();
 
   if (!enabled) {
     return (
@@ -167,7 +182,7 @@ export default function ReelsScreen() {
               keyboardType="url"
             />
             <Button
-              title="Read caption"
+              title={thumbnailUrl ? '✓ Loaded — read again' : 'Load from link'}
               variant="ghost"
               size="sm"
               loading={busy}
@@ -178,25 +193,26 @@ export default function ReelsScreen() {
         </Glass>
 
         <Input
-          label="Caption / description"
-          placeholder="Paste or edit the post's caption — the more it names places, the better."
+          label="Caption (optional — the AI also reads the video's cover frame)"
+          placeholder="Add the caption if you have it — more detail, better results."
           value={caption}
           onChangeText={setCaption}
           multiline
-          numberOfLines={6}
-          className="min-h-32"
+          numberOfLines={5}
+          className="min-h-28"
           textAlignVertical="top"
           error={error}
         />
 
         <Button
-          title={step === 'extracting' ? 'Extracting places…' : 'Extract places with AI'}
+          title={step === 'extracting' ? 'Analysing the reel…' : 'Analyse & extract places'}
           loading={step === 'extracting'}
-          disabled={caption.trim().length < 8}
+          disabled={!canExtract}
           onPress={extract}
         />
-        <Text className="text-center text-xs text-white/35">
-          Instagram captions can’t be read automatically — paste them here.
+        <Text className="text-center text-xs leading-4 text-white/35">
+          Analyses the cover frame + caption. YouTube links get full-video
+          analysis when a Gemini key is set.
         </Text>
       </View>
     </Screen>
