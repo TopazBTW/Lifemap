@@ -10,16 +10,23 @@ import {
   type MapPoint,
 } from '@/features/map/cluster';
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
-import { CountrySheet } from '@/features/map/CountrySheet';
 import { countryAt, countryName, flagEmoji } from '@/features/map/geo';
+import { LocationSheet } from '@/features/map/LocationSheet';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
+import { useCityMarks } from '@/features/map/useCityMarks';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
 import { useMapFocus } from '@/features/map/useMapFocus';
 import { useMemories } from '@/features/memories/useMemories';
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
-import { MOODS, type Place } from '@/shared/types/domain';
+import { MOODS, type Coordinates, type Place } from '@/shared/types/domain';
 import { Glass } from '@/shared/ui';
+
+type TappedLocation = {
+  iso: string | null;
+  coordinate: Coordinates;
+  preset?: { city: string; country: string | null };
+};
 
 /**
  * World Life Map on react-native-maps (Apple Maps on iOS) — runs in Expo Go
@@ -32,8 +39,9 @@ export default function WorldMapScreen() {
   const { data: places = [] } = usePlaces();
   const { data: memories = [] } = useMemories();
   const { data: rollup } = useCountryRollup();
+  const { data: cityMarks } = useCityMarks();
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [tapped, setTapped] = useState<TappedLocation | null>(null);
 
   const mapRef = useRef<MapView>(null);
   const focusTarget = useMapFocus((s) => s.target);
@@ -57,6 +65,11 @@ export default function WorldMapScreen() {
   const mappedMemories = useMemo(
     () => memories.filter((m) => m.coordinates),
     [memories],
+  );
+
+  const markedCities = useMemo(
+    () => Object.entries(cityMarks?.cities ?? {}),
+    [cityMarks],
   );
 
   // Zoom-aware detail: countries → cities → individual pins as you zoom in.
@@ -126,12 +139,15 @@ export default function WorldMapScreen() {
             setSelectedPlace(null);
             return;
           }
-          if (selectedCountry) {
-            setSelectedCountry(null);
+          if (tapped) {
+            setTapped(null);
             return;
           }
           const { latitude, longitude } = e.nativeEvent.coordinate;
-          setSelectedCountry(countryAt(latitude, longitude));
+          setTapped({
+            iso: countryAt(latitude, longitude),
+            coordinate: { lat: latitude, lng: longitude },
+          });
         }}
         showsPointsOfInterest={false}
         toolbarEnabled={false}
@@ -164,11 +180,43 @@ export default function WorldMapScreen() {
               tracksViewChanges={false}
               onPress={(e) => {
                 e.stopPropagation();
-                setSelectedCountry(null);
+                setTapped(null);
                 setSelectedPlace(place);
               }}
             >
               <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+            </Marker>
+          ))}
+
+        {/* Marked cities: coloured pills, shown when not at country zoom. */}
+        {level !== 'country' &&
+          markedCities.map(([key, c]) => (
+            <Marker
+              key={`city-${key}`}
+              coordinate={{ latitude: c.lat, longitude: c.lng }}
+              onPress={(e) => {
+                e.stopPropagation();
+                setSelectedPlace(null);
+                setTapped({
+                  iso: c.country,
+                  coordinate: { lat: c.lat, lng: c.lng },
+                  preset: { city: c.name, country: c.country },
+                });
+              }}
+            >
+              <View
+                className="rounded-pill border border-white/25 px-2.5 py-1"
+                style={{
+                  backgroundColor:
+                    c.status === 'visited'
+                      ? COUNTRY_COLORS.visited
+                      : COUNTRY_COLORS.planned,
+                }}
+              >
+                <Text className="text-xs font-semibold text-white">
+                  {c.status === 'visited' ? '✓' : '✈'} {c.name}
+                </Text>
+              </View>
             </Marker>
           ))}
 
@@ -235,8 +283,8 @@ export default function WorldMapScreen() {
         </Glass>
         <Text className="pt-2 text-center text-xs text-white/40">
           {level === 'individual'
-            ? 'Tap a country to mark it · tap a pin for details'
-            : 'Tap a bubble to zoom in · pinch to see individual pins'}
+            ? 'Tap the map to mark a city or country · tap a pin for details'
+            : 'Tap a bubble to zoom in · pinch to see cities & pins'}
         </Text>
       </View>
 
@@ -265,11 +313,12 @@ export default function WorldMapScreen() {
 
       {selectedPlace ? (
         <PlaceSheet place={selectedPlace} onClose={() => setSelectedPlace(null)} />
-      ) : selectedCountry ? (
-        <CountrySheet
-          iso={selectedCountry}
-          entry={rollup?.countries[selectedCountry] ?? null}
-          onClose={() => setSelectedCountry(null)}
+      ) : tapped ? (
+        <LocationSheet
+          iso={tapped.iso}
+          coordinate={tapped.coordinate}
+          preset={tapped.preset}
+          onClose={() => setTapped(null)}
         />
       ) : null}
     </View>

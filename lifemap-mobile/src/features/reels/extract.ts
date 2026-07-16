@@ -94,7 +94,11 @@ Rules:
 - confidence 0-1, honest: 0.9+ only when the place is named explicitly.
 - Return an empty places array rather than inventing anything.`;
 
-const responseSchema = {
+// Shape instruction for JSON-mode models (Mistral) that take no schema object.
+const JSON_SHAPE = `Respond with ONLY a JSON object of this exact shape:
+{"places":[{"name":"string","kind":"one of ${PLACE_KINDS.join('|')}","country":"ISO 3166-1 alpha-2 or null","city":"string or null","confidence":0.0}]}`;
+
+const geminiSchema = {
   type: 'OBJECT',
   properties: {
     places: {
@@ -124,27 +128,60 @@ type RawPlace = {
   confidence: number;
 };
 
-/** Ask Gemini for place names in the caption. Names only — coords come later. */
-async function extractNames(caption: string): Promise<RawPlace[]> {
-  const key = env.geminiApiKey;
-  if (!key) throw new Error('Add a Gemini key to enable reel extraction.');
+const userPrompt = (caption: string) =>
+  `Extract every identifiable place:\n\n${caption}`;
 
+/** Mistral (La Plateforme) chat completions in JSON mode — the user's provider. */
+async function extractViaMistral(caption: string): Promise<RawPlace[]> {
+  const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.mistralApiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'mistral-small-latest',
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: `${SYSTEM}\n\n${JSON_SHAPE}` },
+        { role: 'user', content: userPrompt(caption) },
+      ],
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(
+      res.status === 401
+        ? 'Mistral rejected the key. Check it in console.mistral.ai.'
+        : `Extraction failed (${res.status}). ${body.slice(0, 120)}`,
+    );
+  }
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) return [];
+  const parsed = JSON.parse(text) as { places?: RawPlace[] };
+  return parsed.places ?? [];
+}
+
+/** Gemini generateContent with a response schema. */
+async function extractViaGemini(caption: string): Promise<RawPlace[]> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.geminiApiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: `Extract every identifiable place:\n\n${caption}` }],
-          },
-        ],
+        contents: [{ role: 'user', parts: [{ text: userPrompt(caption) }] }],
         generationConfig: {
           responseMimeType: 'application/json',
-          responseSchema,
+          responseSchema: geminiSchema,
           temperature: 0.1,
         },
       }),
@@ -166,9 +203,15 @@ async function extractNames(caption: string): Promise<RawPlace[]> {
   };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) return [];
-
   const parsed = JSON.parse(text) as { places?: RawPlace[] };
   return parsed.places ?? [];
+}
+
+/** Pick a provider by which key is set — Mistral wins when both are. */
+async function extractNames(caption: string): Promise<RawPlace[]> {
+  if (env.mistralApiKey) return extractViaMistral(caption);
+  if (env.geminiApiKey) return extractViaGemini(caption);
+  throw new Error('Add a Mistral or Gemini key to enable reel extraction.');
 }
 
 const KIND_SET = new Set<string>(PLACE_KINDS);
@@ -222,6 +265,6 @@ export async function extractPlacesFromCaption(
   return out;
 }
 
-export function hasGemini(): boolean {
-  return !!env.geminiApiKey;
+export function hasExtractor(): boolean {
+  return !!env.mistralApiKey || !!env.geminiApiKey;
 }

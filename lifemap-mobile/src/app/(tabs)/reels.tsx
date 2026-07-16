@@ -7,7 +7,7 @@ import { addPlace } from '@/features/places/usePlaces';
 import {
   detectPlatform,
   extractPlacesFromCaption,
-  hasGemini,
+  hasExtractor,
   resolveCaption,
   type ExtractedPlace,
 } from '@/features/reels/extract';
@@ -24,7 +24,7 @@ export default function ReelsScreen() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  const enabled = hasGemini();
+  const enabled = hasExtractor();
 
   const fetchCaption = async () => {
     setError(null);
@@ -107,7 +107,7 @@ export default function ReelsScreen() {
         <EmptyState
           emoji="🎬"
           title="One free key away"
-          body="Reel extraction uses the free Gemini API. Grab a key at aistudio.google.com (no card) and I'll switch it on."
+          body="Reel extraction needs a free AI key — Mistral (console.mistral.ai) or Gemini (aistudio.google.com). Grab one and I'll switch it on."
         />
       </Screen>
     );

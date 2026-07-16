@@ -140,6 +140,11 @@ service cloud.firestore {
       allow read, write: if signedIn() && uid() == userId;
     }
 
+    // Same model at city granularity: { cities: { key: {name,lat,lng,...} } }.
+    match /cityMarks/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+    }
+
     // ─── Server-maintained projections ──────────────────────────────────────
     // Read-only to clients: written exclusively by Cloud Functions. If a client
     // could write these it could paint any country visited, and the timeline

@@ -248,6 +248,19 @@ export type CountryMarks = {
   countries: Record<CountryCode, 'visited' | 'planned'>;
 };
 
+/** City-level marks. Key is `${city}|${country}`. */
+export type CityMark = {
+  name: string;
+  lat: number;
+  lng: number;
+  country: CountryCode | null;
+  status: 'visited' | 'planned';
+};
+
+export type CityMarks = {
+  cities: Record<string, CityMark>;
+};
+
 // ─── Rollups (derived on-device on the free tier) ────────────────────────────
 
 export type CountryStatus = 'visited' | 'planned' | 'saved' | 'none';

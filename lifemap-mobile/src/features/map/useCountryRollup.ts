@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { useCityMarks } from '@/features/map/useCityMarks';
 import { useCountryMarks } from '@/features/map/useCountryMarks';
 import { useMemories } from '@/features/memories/useMemories';
 import { usePlaces } from '@/features/places/usePlaces';
@@ -20,6 +21,7 @@ export function useCountryRollup(): { data: CountryRollup | null } {
   const { data: places = [] } = usePlaces();
   const { data: memories = [] } = useMemories();
   const { data: marks } = useCountryMarks();
+  const { data: cityMarks } = useCityMarks();
 
   const data = useMemo<CountryRollup | null>(() => {
     const countries: Record<string, CountryEntry> = {};
@@ -56,12 +58,17 @@ export function useCountryRollup(): { data: CountryRollup | null } {
       raise(entry(iso), status);
     }
 
+    // A marked city raises its country's status too, so it shows when zoomed out.
+    for (const mark of Object.values(cityMarks?.cities ?? {})) {
+      if (mark.country) raise(entry(mark.country), mark.status);
+    }
+
     return {
       ownerId: '',
       countries,
       updatedAt: null as never,
     };
-  }, [places, memories, marks]);
+  }, [places, memories, marks, cityMarks]);
 
   return { data };
 }
