@@ -54,6 +54,7 @@ export default function RootLayout() {
               name="establishment/new"
               options={{ presentation: 'modal' }}
             />
+            <Stack.Screen name="couple" options={{ presentation: 'modal' }} />
           </Stack.Protected>
           <Stack.Protected guard={!user}>
             <Stack.Screen name="(auth)" />

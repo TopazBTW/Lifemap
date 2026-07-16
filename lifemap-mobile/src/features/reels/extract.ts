@@ -41,12 +41,57 @@ export type ResolvedCaption = {
   thumbnailUrl: string | null;
 };
 
+const EMPTY = (platform: ReelPlatform): ResolvedCaption => ({
+  platform,
+  caption: '',
+  author: null,
+  thumbnailUrl: null,
+});
+
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+}
+
 /**
- * Pull the caption/title from a link via public oEmbed (keyless for TikTok and
- * YouTube; Instagram has no public endpoint, so the user pastes the caption).
+ * Read a post's caption without any API.
+ *  - TikTok / YouTube: public oEmbed (keyless).
+ *  - Instagram: no public endpoint, so we scrape the public page's
+ *    `og:description` meta tag (served to link-preview bots). Best-effort —
+ *    private posts or a login wall yield nothing, and the user can still paste.
  */
 export async function resolveCaption(url: string): Promise<ResolvedCaption> {
   const platform = detectPlatform(url);
+
+  if (platform === 'instagram') {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'facebookexternalhit/1.1' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return EMPTY(platform);
+      const html = await res.text();
+      const m =
+        html.match(/property="og:description"\s+content="([^"]*)"/i) ??
+        html.match(/content="([^"]*)"\s+property="og:description"/i);
+      const img = html.match(/property="og:image"\s+content="([^"]*)"/i);
+      return {
+        platform,
+        caption: m ? decodeHtml(m[1]) : '',
+        author: null,
+        thumbnailUrl: img ? decodeHtml(img[1]) : null,
+      };
+    } catch {
+      return EMPTY(platform);
+    }
+  }
+
   const endpoint =
     platform === 'tiktok'
       ? `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
@@ -54,13 +99,11 @@ export async function resolveCaption(url: string): Promise<ResolvedCaption> {
         ? `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
         : null;
 
-  if (!endpoint) {
-    return { platform, caption: '', author: null, thumbnailUrl: null };
-  }
+  if (!endpoint) return EMPTY(platform);
 
   try {
     const res = await fetch(endpoint, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return { platform, caption: '', author: null, thumbnailUrl: null };
+    if (!res.ok) return EMPTY(platform);
     const data = (await res.json()) as {
       title?: string;
       author_name?: string;
@@ -73,7 +116,7 @@ export async function resolveCaption(url: string): Promise<ResolvedCaption> {
       thumbnailUrl: data.thumbnail_url ?? null,
     };
   } catch {
-    return { platform, caption: '', author: null, thumbnailUrl: null };
+    return EMPTY(platform);
   }
 }
 

@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Alert, SectionList, Text, View } from 'react-native';
+import { Alert, Pressable, SectionList, Text, View } from 'react-native';
 
 import { signOut, useSession } from '@/features/auth/session';
 import { useMemories } from '@/features/memories/useMemories';
@@ -82,6 +83,21 @@ export default function TimelineScreen() {
           }
         />
       </View>
+
+      <Pressable onPress={() => router.push('/couple')} className="pb-4">
+        <Glass>
+          <View className="flex-row items-center gap-3 p-4">
+            <Text className="text-2xl">💞</Text>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-white">Shared space</Text>
+              <Text className="text-xs text-white/45">
+                Share a bucket list & map with your partner
+              </Text>
+            </View>
+            <Text className="text-lg text-white/40">›</Text>
+          </View>
+        </Glass>
+      </Pressable>
 
       <SectionList
         sections={sections}

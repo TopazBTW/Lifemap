@@ -12,7 +12,7 @@ const ICONS: Record<string, string> = {
   index: '🗺️',
   reels: '🎬',
   memories: '📸',
-  passport: '🛂',
+  passport: '⭐',
   timeline: '🧭',
 };
 

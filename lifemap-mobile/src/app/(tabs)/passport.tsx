@@ -40,7 +40,7 @@ export default function PassportScreen() {
   return (
     <Screen>
       <View className="flex-row items-center justify-between pb-4 pt-2">
-        <Text className="text-3xl font-bold text-white">Passports</Text>
+        <Text className="text-3xl font-bold text-white">Reviews</Text>
         <Button
           title="＋ Add"
           variant="ghost"

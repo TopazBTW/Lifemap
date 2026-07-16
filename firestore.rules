@@ -160,16 +160,33 @@ service cloud.firestore {
     }
 
     // ─── Couple mode ────────────────────────────────────────────────────────
+    // No Cloud Functions on this project, so membership is managed client-side.
+    // Joining is gated by knowing the space's random invite code (resolved via
+    // /spaceInvites/{code}); the join write may only add the caller themselves.
     match /sharedSpaces/{spaceId} {
       allow read: if signedIn() && uid() in resource.data.memberIds;
       allow create: if signedIn()
         && request.resource.data.ownerId == uid()
         && request.resource.data.memberIds == [uid()];
-      // Membership changes go through a function (invite code redemption), so a
-      // member cannot silently add a third party or remove their partner.
-      allow update: if signedIn()
-        && uid() in resource.data.memberIds
-        && request.resource.data.memberIds == resource.data.memberIds;
+      allow update: if signedIn() && (
+        // A member editing space fields, but never the membership list.
+        (uid() in resource.data.memberIds
+          && request.resource.data.memberIds == resource.data.memberIds)
+        ||
+        // A non-member joining: may only append themselves; nothing else moves.
+        (!(uid() in resource.data.memberIds)
+          && request.resource.data.memberIds == resource.data.memberIds.concat([uid()])
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.inviteCode == resource.data.inviteCode)
+      );
+      allow delete: if signedIn() && resource.data.ownerId == uid();
+    }
+
+    // Invite-code → spaceId lookup. Readable by any signed-in user (you must
+    // know the random code); only the space owner writes/removes it.
+    match /spaceInvites/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
       allow delete: if signedIn() && resource.data.ownerId == uid();
     }
 

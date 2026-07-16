@@ -17,6 +17,7 @@ import { useCityMarks } from '@/features/map/useCityMarks';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
 import { useMapFocus } from '@/features/map/useMapFocus';
 import { useMemories } from '@/features/memories/useMemories';
+import { useFoodEntries, useStayEntries } from '@/features/passport/usePassport';
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
 import { MOODS, type Coordinates, type Place } from '@/shared/types/domain';
@@ -28,28 +29,53 @@ type TappedLocation = {
   preset?: { city: string; country: string | null };
 };
 
+type Layers = {
+  places: boolean;
+  memories: boolean;
+  food: boolean;
+  cities: boolean;
+};
+
+const STAY_EMOJI: Record<string, string> = {
+  hotel: '🏨',
+  airbnb: '🏡',
+  hostel: '🛏️',
+  other: '🏨',
+};
+
 /**
- * World Life Map on react-native-maps (Apple Maps on iOS) — runs in Expo Go
- * with no API keys. Country fills derive on-device from the user's data
- * (see useCountryRollup); tapping a country opens its status sheet, tapping
- * a pin opens the place sheet.
+ * World Life Map on react-native-maps (Apple Maps on iOS). Country fills derive
+ * on-device from the user's data. Layers can be toggled so the map doesn't
+ * saturate; clustering collapses pins into city/country bubbles when zoomed out.
  */
 export default function WorldMapScreen() {
   const insets = useSafeAreaInsets();
   const { data: places = [] } = usePlaces();
   const { data: memories = [] } = useMemories();
+  const { data: food = [] } = useFoodEntries();
+  const { data: stays = [] } = useStayEntries();
   const { data: rollup } = useCountryRollup();
   const { data: cityMarks } = useCityMarks();
+
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [tapped, setTapped] = useState<TappedLocation | null>(null);
+  const [layers, setLayers] = useState<Layers>({
+    places: true,
+    memories: true,
+    food: true,
+    cities: true,
+  });
+  const toggle = (k: keyof Layers) =>
+    setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
 
   const mapRef = useRef<MapView>(null);
   const focusTarget = useMapFocus((s) => s.target);
   const clearFocus = useMapFocus((s) => s.clear);
 
-  // "Show on map" from a memory: fly to the target once, then clear it.
+  // "Show on map" from a memory: turn memories on, fly there, clear the signal.
   useEffect(() => {
     if (!focusTarget) return;
+    setLayers((prev) => ({ ...prev, memories: true }));
     mapRef.current?.animateToRegion(
       {
         latitude: focusTarget.lat,
@@ -63,38 +89,39 @@ export default function WorldMapScreen() {
   }, [focusTarget, clearFocus]);
 
   const mappedMemories = useMemo(
-    () => memories.filter((m) => m.coordinates),
-    [memories],
+    () => (layers.memories ? memories.filter((m) => m.coordinates) : []),
+    [memories, layers.memories],
   );
-
+  const mappedFood = useMemo(
+    () => (layers.food ? food.filter((f) => f.coordinates) : []),
+    [food, layers.food],
+  );
+  const mappedStays = useMemo(
+    () => (layers.food ? stays.filter((s) => s.coordinates) : []),
+    [stays, layers.food],
+  );
   const markedCities = useMemo(
-    () => Object.entries(cityMarks?.cities ?? {}),
-    [cityMarks],
+    () => (layers.cities ? Object.entries(cityMarks?.cities ?? {}) : []),
+    [cityMarks, layers.cities],
   );
 
   // Zoom-aware detail: countries → cities → individual pins as you zoom in.
   const [latDelta, setLatDelta] = useState(100);
   const level = zoomLevelFor(latDelta);
 
-  const points = useMemo<MapPoint[]>(
-    () => [
-      ...places.map((p) => ({
-        id: `p-${p.id}`,
-        lat: p.coordinates.lat,
-        lng: p.coordinates.lng,
-        city: p.city,
-        country: p.country,
-      })),
-      ...mappedMemories.map((m) => ({
-        id: `m-${m.id}`,
-        lat: m.coordinates!.lat,
-        lng: m.coordinates!.lng,
-        city: m.city ?? null,
-        country: m.country ?? null,
-      })),
-    ],
-    [places, mappedMemories],
-  );
+  const points = useMemo<MapPoint[]>(() => {
+    const pts: MapPoint[] = [];
+    if (layers.places)
+      for (const p of places)
+        pts.push({ id: `p-${p.id}`, lat: p.coordinates.lat, lng: p.coordinates.lng, city: p.city, country: p.country });
+    for (const m of mappedMemories)
+      pts.push({ id: `m-${m.id}`, lat: m.coordinates!.lat, lng: m.coordinates!.lng, city: m.city ?? null, country: m.country ?? null });
+    for (const f of mappedFood)
+      pts.push({ id: `f-${f.id}`, lat: f.coordinates!.lat, lng: f.coordinates!.lng, city: f.city ?? null, country: f.country ?? null });
+    for (const s of mappedStays)
+      pts.push({ id: `s-${s.id}`, lat: s.coordinates!.lat, lng: s.coordinates!.lng, city: s.city ?? null, country: s.country ?? null });
+    return pts;
+  }, [places, mappedMemories, mappedFood, mappedStays, layers.places]);
 
   const clusters = useMemo(
     () => (level === 'individual' ? [] : clusterPoints(points, level)),
@@ -133,8 +160,6 @@ export default function WorldMapScreen() {
         }}
         onRegionChangeComplete={(r) => setLatDelta(r.latitudeDelta)}
         onPress={(e) => {
-          // A pin tap also fires the map press on iOS; the marker handler
-          // runs first and sets selectedPlace — don't fight it.
           if (selectedPlace) {
             setSelectedPlace(null);
             return;
@@ -166,28 +191,6 @@ export default function WorldMapScreen() {
           />
         ))}
 
-        {/* Individual pins only when zoomed in; otherwise city/country bubbles. */}
-        {level === 'individual' &&
-          places.map((place) => (
-            <Marker
-              key={place.id}
-              coordinate={{
-                latitude: place.coordinates.lat,
-                longitude: place.coordinates.lng,
-              }}
-              // Emoji markers re-render once, then freeze — without this Android
-              // re-rasterises every marker on every frame.
-              tracksViewChanges={false}
-              onPress={(e) => {
-                e.stopPropagation();
-                setTapped(null);
-                setSelectedPlace(place);
-              }}
-            >
-              <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
-            </Marker>
-          ))}
-
         {/* Marked cities: coloured pills, shown when not at country zoom. */}
         {level !== 'country' &&
           markedCities.map(([key, c]) => (
@@ -208,9 +211,7 @@ export default function WorldMapScreen() {
                 className="rounded-pill border border-white/25 px-2.5 py-1"
                 style={{
                   backgroundColor:
-                    c.status === 'visited'
-                      ? COUNTRY_COLORS.visited
-                      : COUNTRY_COLORS.planned,
+                    c.status === 'visited' ? COUNTRY_COLORS.visited : COUNTRY_COLORS.planned,
                 }}
               >
                 <Text className="text-xs font-semibold text-white">
@@ -220,14 +221,28 @@ export default function WorldMapScreen() {
             </Marker>
           ))}
 
+        {/* Individual pins only when zoomed in; otherwise cluster bubbles. */}
+        {level === 'individual' && layers.places &&
+          places.map((place) => (
+            <Marker
+              key={place.id}
+              coordinate={{ latitude: place.coordinates.lat, longitude: place.coordinates.lng }}
+              tracksViewChanges={false}
+              onPress={(e) => {
+                e.stopPropagation();
+                setTapped(null);
+                setSelectedPlace(place);
+              }}
+            >
+              <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+            </Marker>
+          ))}
+
         {level === 'individual' &&
           mappedMemories.map((memory) => (
             <Marker
               key={`mem-${memory.id}`}
-              coordinate={{
-                latitude: memory.coordinates!.lat,
-                longitude: memory.coordinates!.lng,
-              }}
+              coordinate={{ latitude: memory.coordinates!.lat, longitude: memory.coordinates!.lng }}
               tracksViewChanges={false}
               onPress={(e) => {
                 e.stopPropagation();
@@ -237,6 +252,32 @@ export default function WorldMapScreen() {
               <Text style={{ fontSize: 24 }}>
                 {MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
               </Text>
+            </Marker>
+          ))}
+
+        {level === 'individual' &&
+          mappedFood.map((f) => (
+            <Marker
+              key={`food-${f.id}`}
+              coordinate={{ latitude: f.coordinates!.lat, longitude: f.coordinates!.lng }}
+              tracksViewChanges={false}
+              title={f.restaurantName}
+              description={`${'⭐'.repeat(f.rating)}${f.dish ? ` · ${f.dish}` : ''}`}
+            >
+              <Text style={{ fontSize: 22 }}>🍜</Text>
+            </Marker>
+          ))}
+
+        {level === 'individual' &&
+          mappedStays.map((s) => (
+            <Marker
+              key={`stay-${s.id}`}
+              coordinate={{ latitude: s.coordinates!.lat, longitude: s.coordinates!.lng }}
+              tracksViewChanges={false}
+              title={s.name}
+              description={'⭐'.repeat(s.rating)}
+            >
+              <Text style={{ fontSize: 22 }}>{STAY_EMOJI[s.kind] ?? '🏨'}</Text>
             </Marker>
           ))}
 
@@ -266,11 +307,7 @@ export default function WorldMapScreen() {
       </MapView>
 
       {/* Stats header */}
-      <View
-        pointerEvents="box-none"
-        className="absolute inset-x-4"
-        style={{ top: insets.top + 8 }}
-      >
+      <View pointerEvents="box-none" className="absolute inset-x-4" style={{ top: insets.top + 8 }}>
         <Glass intensity={50}>
           <View className="flex-row items-center justify-between px-5 py-3.5">
             <Text className="text-base font-bold text-white">My World</Text>
@@ -288,16 +325,14 @@ export default function WorldMapScreen() {
         </Text>
       </View>
 
-      {/* Legend */}
-      <View
-        pointerEvents="none"
-        className="absolute left-4"
-        style={{ bottom: insets.bottom + 92 }}
-      >
+      {/* Layer toggles */}
+      <View pointerEvents="box-none" className="absolute left-4" style={{ bottom: insets.bottom + 92 }}>
         <Glass>
-          <View className="gap-1.5 px-3 py-2.5">
-            <LegendRow emoji="📍" label="Saved places" />
-            <LegendRow emoji="📸" label="Memories" />
+          <View className="gap-1 p-2">
+            <LayerToggle emoji="📍" label="Places" on={layers.places} onPress={() => toggle('places')} />
+            <LayerToggle emoji="📸" label="Memories" on={layers.memories} onPress={() => toggle('memories')} />
+            <LayerToggle emoji="🍽️" label="Food & stays" on={layers.food} onPress={() => toggle('food')} />
+            <LayerToggle emoji="🏙️" label="Cities" on={layers.cities} onPress={() => toggle('cities')} />
           </View>
         </Glass>
       </View>
@@ -325,12 +360,25 @@ export default function WorldMapScreen() {
   );
 }
 
-function LegendRow({ emoji, label }: { emoji: string; label: string }) {
+function LayerToggle({
+  emoji,
+  label,
+  on,
+  onPress,
+}: {
+  emoji: string;
+  label: string;
+  on: boolean;
+  onPress: () => void;
+}) {
   return (
-    <View className="flex-row items-center gap-2">
-      <Text className="text-sm">{emoji}</Text>
-      <Text className="text-xs text-white/60">{label}</Text>
-    </View>
+    <Pressable
+      onPress={onPress}
+      className={`flex-row items-center gap-2 rounded-xl px-2 py-1.5 ${on ? 'bg-white/10' : ''}`}
+    >
+      <Text className="text-sm" style={{ opacity: on ? 1 : 0.35 }}>{emoji}</Text>
+      <Text className={`text-xs ${on ? 'text-white' : 'text-white/35'}`}>{label}</Text>
+    </Pressable>
   );
 }
 
