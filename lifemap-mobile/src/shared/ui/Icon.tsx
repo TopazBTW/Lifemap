@@ -1,8 +1,7 @@
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 export type IconName =
   | 'map'
-  | 'reels'
   | 'memories'
   | 'reviews'
   | 'timeline'
@@ -41,12 +40,6 @@ export function Icon({
         <>
           <Path {...s} d="M12 21s-6-5.686-6-10a6 6 0 1 1 12 0c0 4.314-6 10-6 10z" />
           <Circle {...s} cx={12} cy={11} r={2.2} fill="none" />
-        </>
-      )}
-      {name === 'reels' && (
-        <>
-          <Rect {...s} x={3} y={4} width={18} height={16} rx={4.5} fill={fill} />
-          <Path {...s} d="M10 8.8l5.2 3.2-5.2 3.2z" />
         </>
       )}
       {name === 'memories' && (

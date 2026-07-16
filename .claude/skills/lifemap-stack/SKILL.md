@@ -39,12 +39,12 @@ The owner will not attach billing. Therefore:
   stored **inline in the Firestore doc as data URIs** — see
   `src/features/memories/useMemories.ts`. Keep docs under 1 MiB.
 - **Cloud Functions v2 cannot be deployed** (needs Blaze). The `functions/`
-  pipeline is dormant. **Reel extraction was ported client-side** to
-  `src/features/reels/extract.ts`: free Gemini key
-  (`EXPO_PUBLIC_GEMINI_API_KEY` from aistudio.google.com) extracts place names
-  from oEmbed captions (TikTok/YouTube keyless; Instagram = paste caption),
-  then geocode via Google Places/Nominatim and write places directly. The old
-  Firestore-reel-doc + `commitReelPlaces` flow and `reel/[id]` screen are gone.
+  pipeline is dormant.
+- **Reel to Reality was removed (2026-07-16)** at the owner's request — the
+  client-side caption/cover-frame extraction wasn't good enough. The `reels`
+  tab, `src/features/reels/`, and the Mistral/Gemini env keys are gone. If it
+  ever returns, the geocode helpers `geocodeViaGoogle`/`geocodeViaNominatim`
+  still exist. Places are added manually (map ＋ FAB → `place/new`).
 
 ## SDK 57 notes (dormant — only relevant if the device situation changes)
 

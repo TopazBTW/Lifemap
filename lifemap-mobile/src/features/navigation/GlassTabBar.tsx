@@ -10,7 +10,6 @@ import { Glass, Icon, type IconName } from '@/shared/ui';
 
 const ICONS: Record<string, IconName> = {
   index: 'map',
-  reels: 'reels',
   memories: 'memories',
   passport: 'reviews',
   timeline: 'timeline',

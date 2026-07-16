@@ -43,7 +43,7 @@ export default function SignUpScreen() {
           <View className="gap-2">
             <Text className="text-4xl font-bold text-white">Create account</Text>
             <Text className="text-base text-white/50">
-              Start turning reels and memories into your world map.
+              Start turning your travels and memories into a world map.
             </Text>
           </View>
 
