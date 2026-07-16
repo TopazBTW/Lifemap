@@ -53,6 +53,23 @@ cross-platform parity.
 requires `import * as FileSystem from 'expo-file-system/legacy'`; most deprecated
 methods **throw at runtime** if imported from the main entrypoint.
 
+## firebase: Metro bundles the WEB auth build unless you set conditionNames
+
+The `firebase` wrapper package's `./auth` export map has **no `react-native`
+condition** (only node/browser/default), and SDK 57's default
+`resolver.unstable_conditionNames` is **empty** — so Metro resolves
+`firebase/auth` → web ESM build and `getReactNativePersistence` is `undefined`
+**at runtime** (TypeError on app boot; tsc says nothing). The fix lives in
+`lifemap-mobile/metro.config.js`:
+
+```js
+config.resolver.unstable_conditionNames = ['react-native', 'browser', 'require'];
+```
+
+This makes the inner `@firebase/auth` (which *does* declare `react-native`)
+resolve to `dist/rn/index.js`. Verify after any firebase/Expo upgrade by
+grepping the dev bundle for `getReactNativePersistence`.
+
 ## firebase: getReactNativePersistence is invisible to TypeScript
 
 `@firebase/auth`'s `exports` map lists `"types"` **before** `"react-native"`.
