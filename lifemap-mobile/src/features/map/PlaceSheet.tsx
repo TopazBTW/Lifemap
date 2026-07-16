@@ -37,7 +37,7 @@ export function PlaceSheet({
                 {[place.city, place.country].filter(Boolean).join(', ')}
               </Text>
             </View>
-            <Button title="✕" variant="ghost" onPress={onClose} className="h-9 px-3 py-1" />
+            <Button title="✕" variant="ghost" size="sm" onPress={onClose} />
           </View>
 
           <View className="flex-row gap-2">

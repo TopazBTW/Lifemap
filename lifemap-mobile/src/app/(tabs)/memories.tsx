@@ -16,8 +16,8 @@ export default function MemoriesScreen() {
         <Button
           title="＋ New"
           variant="ghost"
+          size="sm"
           onPress={() => router.push('/memory/new')}
-          className="h-10 px-4 py-2"
         />
       </View>
 

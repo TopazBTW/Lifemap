@@ -73,7 +73,7 @@ export default function TimelineScreen() {
         <Button
           title="Sign out"
           variant="ghost"
-          className="h-10 px-4 py-2"
+          size="sm"
           onPress={() =>
             Alert.alert('Sign out', 'Sign out of LifeMap?', [
               { text: 'Cancel', style: 'cancel' },

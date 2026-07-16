@@ -152,15 +152,19 @@ export default function NewEstablishmentScreen() {
           </Text>
           <Input
             placeholder={
-              isFood ? 'Search a restaurant, café, bar…' : 'Search a hotel, Airbnb…'
+              isFood
+                ? 'e.g. “Sirocco Bangkok”, “Nobu London”'
+                : 'e.g. “Hotel Costes Paris”, “Aman Tokyo”'
             }
             value={input}
             onChangeText={setInput}
             autoFocus
             autoCorrect={false}
           />
-          <Text className="text-xs text-white/35">
-            {google ? 'Powered by Google Maps' : 'Powered by OpenStreetMap'}
+          <Text className="text-xs leading-4 text-white/35">
+            {google
+              ? 'Powered by Google Maps. Add the city to find places abroad — a plain “restaurant” search shows ones near you.'
+              : 'Powered by OpenStreetMap. Add the city for places abroad.'}
           </Text>
         </View>
 

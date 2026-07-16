@@ -45,7 +45,7 @@ export function CountrySheet({
                 {counts || 'Nothing saved here yet'}
               </Text>
             </View>
-            <Button title="✕" variant="ghost" onPress={onClose} className="h-9 px-3 py-1" />
+            <Button title="✕" variant="ghost" size="sm" onPress={onClose} />
           </View>
 
           <View className="flex-row gap-2">
