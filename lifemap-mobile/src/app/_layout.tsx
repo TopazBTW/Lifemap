@@ -1,3 +1,6 @@
+// Must be first: fills in globals firebase needs on the old Expo Go runtime.
+import '@/shared/lib/polyfills';
+
 import '../global.css';
 
 import { QueryClientProvider } from '@tanstack/react-query';
