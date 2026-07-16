@@ -1,5 +1,4 @@
 import { useMutation } from '@tanstack/react-query';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import {
   collection,
   deleteDoc,
@@ -16,6 +15,7 @@ import { useMemo } from 'react';
 import { useSession } from '@/features/auth/session';
 import { db } from '@/shared/lib/firebase';
 import { useLiveCollection } from '@/shared/lib/firestore-live';
+import { compressToDataUri } from '@/shared/lib/image';
 import type {
   Coordinates,
   Memory,
@@ -58,21 +58,6 @@ export type NewMemoryMedia = {
  * If the project ever moves to Blaze, swap this for real Storage uploads.
  */
 const MAX_PHOTOS = 3;
-const PHOTO_MAX_WIDTH = 900;
-const PHOTO_QUALITY = 0.55;
-
-async function compressToDataUri(uri: string): Promise<string> {
-  const ctx = ImageManipulator.manipulate(uri);
-  ctx.resize({ width: PHOTO_MAX_WIDTH });
-  const image = await ctx.renderAsync();
-  const result = await image.saveAsync({
-    format: SaveFormat.JPEG,
-    compress: PHOTO_QUALITY,
-    base64: true,
-  });
-  if (!result.base64) throw new Error('Could not compress photo.');
-  return `data:image/jpeg;base64,${result.base64}`;
-}
 
 type CreateMemoryArgs = {
   title: string;

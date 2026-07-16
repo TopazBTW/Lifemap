@@ -147,15 +147,26 @@ export type Memory = {
 
 // ─── Passports ───────────────────────────────────────────────────────────────
 
+/** Enrichment pulled from a public source (Wikipedia) — "extracted" info, kept
+ * separate from the user's own photos/review so the UI can show them side by
+ * side. Null when the establishment isn't notable enough to have a page. */
+export type PlaceEnrichment = {
+  coverImageUrl: string | null;
+  summary: string | null;
+  address: string | null;
+};
+
 export type FoodEntry = {
   id: string;
   ownerId: string;
   restaurantName: string;
-  dish?: string;
+  dish?: string | null;
   rating: number; // 1–5
-  priceLevel?: 1 | 2 | 3 | 4;
-  notes?: string;
-  photoUrl?: string | null;
+  priceLevel?: 1 | 2 | 3 | 4 | null;
+  review?: string | null;
+  /** The user's own photos, compressed inline (data URIs). */
+  photos: string[];
+  enrichment?: PlaceEnrichment | null;
   coordinates?: Coordinates | null;
   country?: CountryCode | null;
   city?: string | null;
@@ -174,10 +185,10 @@ export type StayEntry = {
   name: string;
   kind: StayKind;
   rating: number; // 1–5
-  review?: string;
-  pricePerNight?: number;
-  currency?: string;
-  photoUrl?: string | null;
+  review?: string | null;
+  /** The user's own photos, compressed inline (data URIs). */
+  photos: string[];
+  enrichment?: PlaceEnrichment | null;
   coordinates?: Coordinates | null;
   country?: CountryCode | null;
   city?: string | null;
@@ -185,22 +196,6 @@ export type StayEntry = {
   sharedSpaceId?: string | null;
   checkIn: Timestamp;
   checkOut?: Timestamp | null;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-};
-
-export type Run = {
-  id: string;
-  ownerId: string;
-  distanceMeters: number;
-  durationSec: number;
-  /** Encoded polyline of the route, if tracked. */
-  polyline?: string | null;
-  startCoordinates?: Coordinates | null;
-  country?: CountryCode | null;
-  city?: string | null;
-  source: 'manual' | 'tracked' | 'strava';
-  startedAt: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
@@ -270,7 +265,6 @@ export type CountryEntry = {
   placeCount: number;
   memoryCount: number;
   reelCount: number;
-  runCount: number;
 };
 
 export type CountryRollup = {

@@ -3,11 +3,7 @@ import { Alert, SectionList, Text, View } from 'react-native';
 
 import { signOut, useSession } from '@/features/auth/session';
 import { useMemories } from '@/features/memories/useMemories';
-import {
-  useFoodEntries,
-  useRuns,
-  useStayEntries,
-} from '@/features/passport/usePassport';
+import { useFoodEntries, useStayEntries } from '@/features/passport/usePassport';
 import { MOODS } from '@/shared/types/domain';
 import { Button, EmptyState, Glass, Screen } from '@/shared/ui';
 
@@ -29,7 +25,6 @@ export default function TimelineScreen() {
   const { data: memories = [] } = useMemories();
   const { data: food = [] } = useFoodEntries();
   const { data: stays = [] } = useStayEntries();
-  const { data: runs = [] } = useRuns();
 
   const sections = useMemo(() => {
     const items: TimelineItem[] = [
@@ -54,13 +49,6 @@ export default function TimelineScreen() {
         subtitle: 'Stay',
         date: s.checkIn?.toDate?.() ?? new Date(0),
       })),
-      ...runs.map((r) => ({
-        id: `run-${r.id}`,
-        emoji: '🏃',
-        title: `${(r.distanceMeters / 1000).toFixed(1)} km run`,
-        subtitle: r.city ?? 'Running passport',
-        date: r.startedAt?.toDate?.() ?? new Date(0),
-      })),
     ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
     // Group by month for section headers ("July 2026").
@@ -73,7 +61,7 @@ export default function TimelineScreen() {
       (groups.get(key) ?? groups.set(key, []).get(key)!).push(item);
     }
     return Array.from(groups, ([title, data]) => ({ title, data }));
-  }, [memories, food, stays, runs]);
+  }, [memories, food, stays]);
 
   return (
     <Screen>
@@ -130,7 +118,7 @@ export default function TimelineScreen() {
           <EmptyState
             emoji="🧭"
             title="Your story starts here"
-            body="Memories, meals, stays and runs will all appear on one timeline of your life."
+            body="Memories, meals and stays will all appear on one timeline of your life."
           />
         }
       />

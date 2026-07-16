@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 
 import { useCountryMarks } from '@/features/map/useCountryMarks';
 import { useMemories } from '@/features/memories/useMemories';
-import { useRuns } from '@/features/passport/usePassport';
 import { usePlaces } from '@/features/places/usePlaces';
 import type { CountryEntry, CountryRollup } from '@/shared/types/domain';
 
@@ -14,13 +13,12 @@ import type { CountryEntry, CountryRollup } from '@/shared/types/domain';
  * the source collections are already streamed to the client for their own
  * screens, so deriving here costs nothing extra and is never stale.
  *
- * Mirrors functions/src/rollup.ts precedence: an explicit user mark or any
- * memory/run proves "visited"; place status ranks visited > planned > saved.
+ * An explicit user mark or any memory proves "visited"; place status ranks
+ * visited > planned > saved.
  */
 export function useCountryRollup(): { data: CountryRollup | null } {
   const { data: places = [] } = usePlaces();
   const { data: memories = [] } = useMemories();
-  const { data: runs = [] } = useRuns();
   const { data: marks } = useCountryMarks();
 
   const data = useMemo<CountryRollup | null>(() => {
@@ -31,7 +29,6 @@ export function useCountryRollup(): { data: CountryRollup | null } {
         placeCount: 0,
         memoryCount: 0,
         reelCount: 0,
-        runCount: 0,
       });
 
     const raise = (e: CountryEntry, status: 'visited' | 'planned' | 'saved') => {
@@ -55,13 +52,6 @@ export function useCountryRollup(): { data: CountryRollup | null } {
       e.status = 'visited';
     }
 
-    for (const r of runs) {
-      if (!r.country) continue;
-      const e = entry(r.country);
-      e.runCount += 1;
-      e.status = 'visited';
-    }
-
     for (const [iso, status] of Object.entries(marks?.countries ?? {})) {
       raise(entry(iso), status);
     }
@@ -71,7 +61,7 @@ export function useCountryRollup(): { data: CountryRollup | null } {
       countries,
       updatedAt: null as never,
     };
-  }, [places, memories, runs, marks]);
+  }, [places, memories, marks]);
 
   return { data };
 }

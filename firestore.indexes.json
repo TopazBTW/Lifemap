@@ -42,14 +42,6 @@
       ]
     },
     {
-      "collectionGroup": "runs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "ownerId", "order": "ASCENDING" },
-        { "fieldPath": "startedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "foodEntries",
       "queryScope": "COLLECTION",
       "fields": [

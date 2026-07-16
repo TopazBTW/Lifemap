@@ -1,7 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   orderBy,
   query,
   serverTimestamp,
@@ -11,9 +12,16 @@ import {
 import { useMemo } from 'react';
 
 import { useSession } from '@/features/auth/session';
-import { db } from '@/shared/lib/firebase';
+import { auth, db } from '@/shared/lib/firebase';
 import { useLiveCollection } from '@/shared/lib/firestore-live';
-import type { FoodEntry, Run, StayEntry, StayKind } from '@/shared/types/domain';
+import { compressToDataUri } from '@/shared/lib/image';
+import type {
+  Coordinates,
+  FoodEntry,
+  PlaceEnrichment,
+  StayEntry,
+  StayKind,
+} from '@/shared/types/domain';
 
 function useOwnedCollection<T>(
   name: string,
@@ -49,110 +57,84 @@ export function useStayEntries() {
   }));
 }
 
-export function useRuns() {
-  return useOwnedCollection<Run>('runs', 'startedAt', (id, data) => ({
-    ...(data as Omit<Run, 'id'>),
-    id,
-  }));
+/** Shared shape for both passports — a real establishment plus the user's take. */
+export type EstablishmentDraft = {
+  name: string;
+  rating: number;
+  review?: string;
+  /** Local URIs of the user's own photos; compressed on save. */
+  photoUris: string[];
+  coordinates?: Coordinates | null;
+  country?: string | null;
+  city?: string | null;
+  enrichment?: PlaceEnrichment | null;
+  /** Food only. */
+  dish?: string;
+  /** Stay only. */
+  kind?: StayKind;
+};
+
+const MAX_PHOTOS = 3;
+
+async function compressPhotos(uris: string[]): Promise<string[]> {
+  const photos: string[] = [];
+  for (const uri of uris.slice(0, MAX_PHOTOS)) {
+    photos.push(await compressToDataUri(uri));
+  }
+  return photos;
 }
 
-export function useAddFoodEntry() {
-  const user = useSession((s) => s.user);
-  return useMutation({
-    mutationFn: async (args: {
-      restaurantName: string;
-      dish?: string;
-      rating: number;
-      city?: string;
-      country?: string;
-      notes?: string;
-    }) => {
-      if (!user) throw new Error('Not signed in.');
-      await addDoc(collection(db, 'foodEntries'), {
-        ownerId: user.uid,
-        restaurantName: args.restaurantName,
-        dish: args.dish ?? null,
-        rating: args.rating,
-        notes: args.notes ?? null,
-        photoUrl: null,
-        coordinates: null,
-        country: args.country?.toUpperCase() || null,
-        city: args.city || null,
-        placeId: null,
-        sharedSpaceId: null,
-        visitedAt: Timestamp.now(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    },
+export async function addFoodEntry(draft: EstablishmentDraft): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in.');
+  const photos = await compressPhotos(draft.photoUris);
+  await addDoc(collection(db, 'foodEntries'), {
+    ownerId: uid,
+    restaurantName: draft.name,
+    dish: draft.dish?.trim() || null,
+    rating: draft.rating,
+    review: draft.review?.trim() || null,
+    photos,
+    enrichment: draft.enrichment ?? null,
+    coordinates: draft.coordinates ?? null,
+    country: draft.country?.toUpperCase() || null,
+    city: draft.city || null,
+    placeId: null,
+    sharedSpaceId: null,
+    visitedAt: Timestamp.now(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
-export function useAddStayEntry() {
-  const user = useSession((s) => s.user);
-  return useMutation({
-    mutationFn: async (args: {
-      name: string;
-      kind: StayKind;
-      rating: number;
-      review?: string;
-      city?: string;
-      country?: string;
-    }) => {
-      if (!user) throw new Error('Not signed in.');
-      await addDoc(collection(db, 'stayEntries'), {
-        ownerId: user.uid,
-        name: args.name,
-        kind: args.kind,
-        rating: args.rating,
-        review: args.review ?? null,
-        photoUrl: null,
-        coordinates: null,
-        country: args.country?.toUpperCase() || null,
-        city: args.city || null,
-        placeId: null,
-        sharedSpaceId: null,
-        checkIn: Timestamp.now(),
-        checkOut: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    },
+export async function addStayEntry(draft: EstablishmentDraft): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in.');
+  const photos = await compressPhotos(draft.photoUris);
+  await addDoc(collection(db, 'stayEntries'), {
+    ownerId: uid,
+    name: draft.name,
+    kind: draft.kind ?? 'hotel',
+    rating: draft.rating,
+    review: draft.review?.trim() || null,
+    photos,
+    enrichment: draft.enrichment ?? null,
+    coordinates: draft.coordinates ?? null,
+    country: draft.country?.toUpperCase() || null,
+    city: draft.city || null,
+    placeId: null,
+    sharedSpaceId: null,
+    checkIn: Timestamp.now(),
+    checkOut: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
 
-export function useAddRun() {
-  const user = useSession((s) => s.user);
-  return useMutation({
-    mutationFn: async (args: {
-      distanceKm: number;
-      durationMin: number;
-      city?: string;
-      country?: string;
-    }) => {
-      if (!user) throw new Error('Not signed in.');
-      await addDoc(collection(db, 'runs'), {
-        ownerId: user.uid,
-        distanceMeters: Math.round(args.distanceKm * 1000),
-        durationSec: Math.round(args.durationMin * 60),
-        polyline: null,
-        startCoordinates: null,
-        country: args.country?.toUpperCase() || null,
-        city: args.city || null,
-        source: 'manual',
-        startedAt: Timestamp.now(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    },
-  });
+export async function deleteFoodEntry(id: string) {
+  await deleteDoc(doc(db, 'foodEntries', id));
 }
 
-/** min/km pace, formatted "5'24"" — the number runners actually think in. */
-export function formatPace(distanceMeters: number, durationSec: number): string {
-  if (!distanceMeters) return '—';
-  const secPerKm = durationSec / (distanceMeters / 1000);
-  const min = Math.floor(secPerKm / 60);
-  const sec = Math.round(secPerKm % 60);
-  return `${min}'${String(sec).padStart(2, '0')}"`;
+export async function deleteStayEntry(id: string) {
+  await deleteDoc(doc(db, 'stayEntries', id));
 }

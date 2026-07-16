@@ -24,7 +24,6 @@ export function CountrySheet({
   const counts = [
     entry?.placeCount ? `${entry.placeCount} places` : null,
     entry?.memoryCount ? `${entry.memoryCount} memories` : null,
-    entry?.runCount ? `${entry.runCount} runs` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -69,8 +68,8 @@ export function CountrySheet({
           </View>
 
           <Text className="text-xs leading-4 text-white/35">
-            Tapping an active status clears it. Memories and runs in a country
-            mark it visited automatically.
+            Tapping an active status clears it. Memories in a country mark it
+            visited automatically.
           </Text>
         </View>
       </Glass>

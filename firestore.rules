@@ -110,13 +110,6 @@ service cloud.firestore {
       allow delete: if owns(resource);
     }
 
-    match /runs/{runId} {
-      allow read: if owns(resource);
-      allow create: if creatingOwn();
-      allow update: if owns(resource) && ownerUnchanged();
-      allow delete: if owns(resource);
-    }
-
     match /foodEntries/{entryId} {
       allow read: if owns(resource) || sharedWithMe(resource);
       allow create: if creatingOwn();
