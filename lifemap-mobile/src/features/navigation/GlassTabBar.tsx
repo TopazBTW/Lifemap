@@ -6,15 +6,18 @@ import * as Haptics from 'expo-haptics';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Glass } from '@/shared/ui';
+import { Glass, Icon, type IconName } from '@/shared/ui';
 
-const ICONS: Record<string, string> = {
-  index: '🗺️',
-  reels: '🎬',
-  memories: '📸',
-  passport: '⭐',
-  timeline: '🧭',
+const ICONS: Record<string, IconName> = {
+  index: 'map',
+  reels: 'reels',
+  memories: 'memories',
+  passport: 'reviews',
+  timeline: 'timeline',
 };
+
+const ACTIVE = '#FFFFFF';
+const INACTIVE = 'rgba(255,255,255,0.42)';
 
 /**
  * Floating glass pill tab bar. Sits above the content (absolute) so the map
@@ -52,11 +55,18 @@ export function GlassTabBar({ state, descriptors, navigation }: BottomTabBarProp
                     navigation.navigate(route.name, route.params);
                   }
                 }}
-                className={`items-center rounded-pill px-4 py-1.5 ${
+                className={`items-center gap-1 rounded-pill px-4 py-2 ${
                   focused ? 'bg-white/15' : ''
                 }`}
               >
-                <Text className="text-lg">{ICONS[route.name] ?? '•'}</Text>
+                <Icon
+                  name={ICONS[route.name] ?? 'map'}
+                  size={22}
+                  color={focused ? ACTIVE : INACTIVE}
+                  strokeWidth={focused ? 2 : 1.7}
+                  // Subtle fill on the active icon reads as "selected".
+                  fill={focused ? 'rgba(255,255,255,0.14)' : 'none'}
+                />
                 <Text
                   className={`text-[10px] font-medium ${
                     focused ? 'text-white' : 'text-white/45'

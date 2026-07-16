@@ -21,7 +21,7 @@ import { useFoodEntries, useStayEntries } from '@/features/passport/usePassport'
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
 import { MOODS, type Coordinates, type Place } from '@/shared/types/domain';
-import { Glass } from '@/shared/ui';
+import { Glass, Icon } from '@/shared/ui';
 
 type TappedLocation = {
   iso: string | null;
@@ -343,7 +343,7 @@ export default function WorldMapScreen() {
         className="absolute bottom-28 right-5 h-14 w-14 items-center justify-center rounded-full bg-horizon-500 shadow-lg"
         accessibilityLabel="Add a place"
       >
-        <Text className="text-2xl text-white">＋</Text>
+        <Icon name="plus" size={26} color="#FFFFFF" strokeWidth={2.2} />
       </Pressable>
 
       {selectedPlace ? (
