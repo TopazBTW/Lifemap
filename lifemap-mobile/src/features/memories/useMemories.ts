@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import {
   collection,
   deleteDoc,
@@ -10,11 +11,10 @@ import {
   Timestamp,
   where,
 } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useMemo } from 'react';
 
 import { useSession } from '@/features/auth/session';
-import { db, storage } from '@/shared/lib/firebase';
+import { db } from '@/shared/lib/firebase';
 import { useLiveCollection } from '@/shared/lib/firestore-live';
 import type {
   Coordinates,
@@ -50,6 +50,30 @@ export type NewMemoryMedia = {
   height?: number;
 };
 
+/**
+ * Photos are stored **inline in the Firestore doc** as compressed JPEG data
+ * URIs, not in Firebase Storage — Storage requires the paid Blaze plan and
+ * this project runs on the free tier. At 900px / q0.55 a photo lands around
+ * 60–150 KB; MAX_PHOTOS keeps the doc safely under Firestore's 1 MiB limit.
+ * If the project ever moves to Blaze, swap this for real Storage uploads.
+ */
+const MAX_PHOTOS = 3;
+const PHOTO_MAX_WIDTH = 900;
+const PHOTO_QUALITY = 0.55;
+
+async function compressToDataUri(uri: string): Promise<string> {
+  const ctx = ImageManipulator.manipulate(uri);
+  ctx.resize({ width: PHOTO_MAX_WIDTH });
+  const image = await ctx.renderAsync();
+  const result = await image.saveAsync({
+    format: SaveFormat.JPEG,
+    compress: PHOTO_QUALITY,
+    base64: true,
+  });
+  if (!result.base64) throw new Error('Could not compress photo.');
+  return `data:image/jpeg;base64,${result.base64}`;
+}
+
 type CreateMemoryArgs = {
   title: string;
   note?: string;
@@ -69,28 +93,22 @@ export function useCreateMemory() {
     mutationFn: async (args: CreateMemoryArgs) => {
       if (!user) throw new Error('Not signed in.');
 
-      // Pre-allocate the doc id so media can live under a stable Storage path
-      // (users/{uid}/memories/{memoryId}/…, matching storage.rules).
-      const memoryRef = doc(collection(db, 'memories'));
+      const photos = args.media
+        .filter((m) => m.type === 'photo')
+        .slice(0, MAX_PHOTOS);
 
       const media: MemoryMedia[] = [];
-      for (const [i, item] of args.media.entries()) {
-        const ext = item.type === 'photo' ? 'jpg' : 'mp4';
-        const path = `users/${user.uid}/memories/${memoryRef.id}/${i}.${ext}`;
-        const blob = await (await fetch(item.uri)).blob();
-        const fileRef = storageRef(storage, path);
-        await uploadBytes(fileRef, blob, {
-          contentType: item.type === 'photo' ? 'image/jpeg' : 'video/mp4',
-        });
+      for (const item of photos) {
         media.push({
-          storagePath: path,
-          downloadUrl: await getDownloadURL(fileRef),
-          type: item.type,
+          storagePath: 'inline',
+          downloadUrl: await compressToDataUri(item.uri),
+          type: 'photo',
           width: item.width,
           height: item.height,
         });
       }
 
+      const memoryRef = doc(collection(db, 'memories'));
       await setDoc(memoryRef, {
         ownerId: user.uid,
         title: args.title,

@@ -1,7 +1,7 @@
-// expo-router 57 vendors React Navigation — installing @react-navigation/*
-// yourself creates a second, incompatible copy. Import the types from the
-// vendored path (expo-router declares no `exports` map, so this resolves).
-import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
+// expo-router 6 (SDK 54) depends on real @react-navigation/* packages, so the
+// types come from there. (In SDK 57 the router vendors its own copy and this
+// import must change to expo-router/build/react-navigation/bottom-tabs.)
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import * as Haptics from 'expo-haptics';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

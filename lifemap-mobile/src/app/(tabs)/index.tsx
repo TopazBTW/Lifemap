@@ -45,7 +45,7 @@ export default function WorldMapScreen() {
           longitudeDelta: 120,
         }}
         onPress={() => setSelected(null)}
-        showsPointsOfInterests={false}
+        showsPointsOfInterest={false}
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}

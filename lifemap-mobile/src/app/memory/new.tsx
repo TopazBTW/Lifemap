@@ -25,22 +25,26 @@ export default function NewMemoryScreen() {
   const create = useCreateMemory();
 
   const pickMedia = async () => {
+    // Photos only, capped at 3: they're stored inline in Firestore (free
+    // tier — no Storage bucket), so size is bounded. See useMemories.ts.
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 6,
+      selectionLimit: 3,
       quality: 0.85,
     });
     if (result.canceled) return;
-    setMedia((prev) => [
-      ...prev,
-      ...result.assets.map((a) => ({
-        uri: a.uri,
-        type: a.type === 'video' ? ('video' as const) : ('photo' as const),
-        width: a.width,
-        height: a.height,
-      })),
-    ]);
+    setMedia((prev) =>
+      [
+        ...prev,
+        ...result.assets.map((a) => ({
+          uri: a.uri,
+          type: 'photo' as const,
+          width: a.width,
+          height: a.height,
+        })),
+      ].slice(0, 3),
+    );
   };
 
   const tagLocation = async () => {
@@ -127,7 +131,7 @@ export default function NewMemoryScreen() {
 
         <View className="gap-2">
           <Text className="text-xs font-medium uppercase tracking-wider text-white/50">
-            Photos & videos
+            Photos (up to 3)
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {media.map((m, i) => (

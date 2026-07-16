@@ -1,19 +1,41 @@
 ---
 name: lifemap-stack
-description: Version landmines and hard constraints for the LifeMap AI Expo SDK 57 stack. Read BEFORE adding a dependency, importing an Expo/Firebase module, or touching babel/metro/tailwind config in lifemap-mobile. Triggers on expo-av, expo-file-system, splash, newArchEnabled, getReactNativePersistence, nativewind, reanimated, firebase auth persistence.
+description: Version landmines and hard constraints for the LifeMap AI Expo stack (pinned to SDK 54). Read BEFORE adding a dependency, importing an Expo/Firebase module, or touching babel/metro/tailwind config in lifemap-mobile. Triggers on expo-av, expo-file-system, splash, newArchEnabled, getReactNativePersistence, nativewind, reanimated, firebase auth persistence.
 ---
 
 # LifeMap stack constraints
 
-Verified against this repo on 2026-07-14. Each item cost a real debugging cycle —
-don't re-derive them, and don't trust pre-SDK-57 training data or blog posts.
+Each item cost a real debugging cycle — don't re-derive them.
 
-## Always check the versioned docs first
+## PINNED TO SDK 54 — do not upgrade (2026-07-16)
 
-`lifemap-mobile/AGENTS.md` says to read https://docs.expo.dev/versions/v57.0.0/
-before writing code. This is not boilerplate — SDK 57 **removed** APIs that every
-tutorial still uses. A 404 on `docs.expo.dev/versions/v57.0.0/sdk/<pkg>/` means
-the package is gone from the SDK.
+The owner's iPhone runs an iOS old enough that the App Store serves an Expo Go
+build whose ceiling is **SDK 54**, and Expo Go is the only distribution channel
+(no paid Apple Developer account, no EAS builds, Windows dev machine → no
+local iOS builds). `npx expo install --fix` against 54, docs at
+https://docs.expo.dev/versions/v54.0.0/. Consequences:
+
+- **expo-router 6 uses real `@react-navigation/*` deps** — import
+  `BottomTabBarProps` from `@react-navigation/bottom-tabs` (they're transitive
+  deps, don't add them to package.json). The vendored-path import only applies
+  if the project ever returns to SDK 57.
+- **`babel-preset-expo` must be an explicit devDependency** in 54 — Metro fails
+  with "Cannot find module 'babel-preset-expo'" otherwise.
+- Only Expo-Go-bundled native modules are usable: react-native-maps yes,
+  @rnmapbox/maps or any custom native module no.
+
+## Free-tier-only Firebase (no Blaze, no bank card)
+
+The owner will not attach billing. Therefore:
+
+- **No Firebase Storage.** Memory photos are compressed (900px, q0.55, ≤3) and
+  stored **inline in the Firestore doc as data URIs** — see
+  `src/features/memories/useMemories.ts`. Keep docs under 1 MiB.
+- **Cloud Functions v2 cannot be deployed** (needs Blaze). The reel-extraction
+  pipeline exists in `functions/` but is dormant; reels stay `pending` until
+  the project gets Blaze or the pipeline moves elsewhere.
+
+## SDK 57 notes (dormant — only relevant if the device situation changes)
 
 ## Removed in SDK 57 (do not use)
 
