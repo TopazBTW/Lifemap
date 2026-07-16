@@ -9,8 +9,18 @@ import {
   useCreateMemory,
   type NewMemoryMedia,
 } from '@/features/memories/useMemories';
+import { countryName, flagEmoji } from '@/features/map/geo';
+import { LocationPicker } from '@/features/places/LocationPicker';
+import { reverseGeocode } from '@/features/places/searchPlaces';
 import { MOODS, type Coordinates, type Mood } from '@/shared/types/domain';
 import { Button, Chip, Glass, Input, Rating, Screen } from '@/shared/ui';
+
+type PickedLocation = {
+  coordinates: Coordinates;
+  country: string | null;
+  city: string | null;
+  label: string;
+};
 
 export default function NewMemoryScreen() {
   const [title, setTitle] = useState('');
@@ -18,7 +28,7 @@ export default function NewMemoryScreen() {
   const [mood, setMood] = useState<Mood | undefined>();
   const [rating, setRating] = useState(0);
   const [media, setMedia] = useState<NewMemoryMedia[]>([]);
-  const [coords, setCoords] = useState<Coordinates | null>(null);
+  const [location, setLocation] = useState<PickedLocation | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +57,7 @@ export default function NewMemoryScreen() {
     );
   };
 
-  const tagLocation = async () => {
+  const useCurrentLocation = async () => {
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -55,7 +65,20 @@ export default function NewMemoryScreen() {
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      const coordinates = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+      // Reverse geocode so the memory colours its country on the map.
+      const { country, city } = await reverseGeocode(coordinates.lat, coordinates.lng);
+      setLocation({
+        coordinates,
+        country,
+        city,
+        label:
+          [city, country ? countryName(country) : null].filter(Boolean).join(', ') ||
+          'Current location',
+      });
     } finally {
       setLocating(false);
     }
@@ -70,7 +93,9 @@ export default function NewMemoryScreen() {
         mood,
         rating: rating || undefined,
         occurredAt: new Date(),
-        coordinates: coords,
+        coordinates: location?.coordinates ?? null,
+        country: location?.country ?? null,
+        city: location?.city ?? null,
         media,
       },
       {
@@ -159,19 +184,51 @@ export default function NewMemoryScreen() {
           ) : null}
         </View>
 
-        <Glass>
-          <Pressable
-            onPress={tagLocation}
-            className="flex-row items-center justify-between p-4"
-          >
-            <Text className="text-sm text-white/80">
-              {coords
-                ? `📍 Tagged (${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)})`
-                : '📍 Tag current location'}
-            </Text>
-            {locating ? <Text className="text-xs text-white/40">Locating…</Text> : null}
-          </Pressable>
-        </Glass>
+        <View className="gap-2">
+          <Text className="text-xs font-medium uppercase tracking-wider text-white/50">
+            Location
+          </Text>
+          {location ? (
+            <Glass>
+              <View className="flex-row items-center justify-between p-4">
+                <Text className="flex-1 text-sm text-white/85" numberOfLines={1}>
+                  {location.country ? `${flagEmoji(location.country)} ` : '📍 '}
+                  {location.label}
+                </Text>
+                <Button
+                  title="Clear"
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => setLocation(null)}
+                />
+              </View>
+            </Glass>
+          ) : (
+            <>
+              <LocationPicker
+                placeholder="Search where this happened…"
+                onPick={(r) =>
+                  setLocation({
+                    coordinates: { lat: r.lat, lng: r.lng },
+                    country: r.country,
+                    city: r.city,
+                    label:
+                      [r.city, r.country ? countryName(r.country) : null]
+                        .filter(Boolean)
+                        .join(', ') || r.name,
+                  })
+                }
+              />
+              <Button
+                title={locating ? 'Locating…' : '📍 Use current location'}
+                variant="ghost"
+                size="sm"
+                loading={locating}
+                onPress={useCurrentLocation}
+              />
+            </>
+          )}
+        </View>
 
         {error ? <Text className="text-sm text-red-400">{error}</Text> : null}
 

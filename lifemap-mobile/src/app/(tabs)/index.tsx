@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +9,11 @@ import { CountrySheet } from '@/features/map/CountrySheet';
 import { countryAt } from '@/features/map/geo';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
+import { useMapFocus } from '@/features/map/useMapFocus';
+import { useMemories } from '@/features/memories/useMemories';
 import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
-import type { Place } from '@/shared/types/domain';
+import { MOODS, type Place } from '@/shared/types/domain';
 import { Glass } from '@/shared/ui';
 
 /**
@@ -23,9 +25,34 @@ import { Glass } from '@/shared/ui';
 export default function WorldMapScreen() {
   const insets = useSafeAreaInsets();
   const { data: places = [] } = usePlaces();
+  const { data: memories = [] } = useMemories();
   const { data: rollup } = useCountryRollup();
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+
+  const mapRef = useRef<MapView>(null);
+  const focusTarget = useMapFocus((s) => s.target);
+  const clearFocus = useMapFocus((s) => s.clear);
+
+  // "Show on map" from a memory: fly to the target once, then clear it.
+  useEffect(() => {
+    if (!focusTarget) return;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: focusTarget.lat,
+        longitude: focusTarget.lng,
+        latitudeDelta: 4,
+        longitudeDelta: 4,
+      },
+      800,
+    );
+    clearFocus();
+  }, [focusTarget, clearFocus]);
+
+  const mappedMemories = useMemo(
+    () => memories.filter((m) => m.coordinates),
+    [memories],
+  );
 
   const fills = useMemo(() => countryFills(rollup), [rollup]);
 
@@ -40,6 +67,7 @@ export default function WorldMapScreen() {
   return (
     <View className="flex-1 bg-ink-950">
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
         userInterfaceStyle="dark"
         initialRegion={{
@@ -98,6 +126,25 @@ export default function WorldMapScreen() {
             <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
           </Marker>
         ))}
+
+        {mappedMemories.map((memory) => (
+          <Marker
+            key={`mem-${memory.id}`}
+            coordinate={{
+              latitude: memory.coordinates!.lat,
+              longitude: memory.coordinates!.lng,
+            }}
+            tracksViewChanges={false}
+            onPress={(e) => {
+              e.stopPropagation();
+              router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
+            }}
+          >
+            <Text style={{ fontSize: 24 }}>
+              {MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
+            </Text>
+          </Marker>
+        ))}
       </MapView>
 
       {/* Stats header */}
@@ -121,6 +168,20 @@ export default function WorldMapScreen() {
         </Text>
       </View>
 
+      {/* Legend */}
+      <View
+        pointerEvents="none"
+        className="absolute left-4"
+        style={{ bottom: insets.bottom + 92 }}
+      >
+        <Glass>
+          <View className="gap-1.5 px-3 py-2.5">
+            <LegendRow emoji="📍" label="Saved places" />
+            <LegendRow emoji="📸" label="Memories" />
+          </View>
+        </Glass>
+      </View>
+
       {/* Add place FAB */}
       <Pressable
         onPress={() => router.push('/place/new')}
@@ -139,6 +200,15 @@ export default function WorldMapScreen() {
           onClose={() => setSelectedCountry(null)}
         />
       ) : null}
+    </View>
+  );
+}
+
+function LegendRow({ emoji, label }: { emoji: string; label: string }) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <Text className="text-sm">{emoji}</Text>
+      <Text className="text-xs text-white/60">{label}</Text>
     </View>
   );
 }

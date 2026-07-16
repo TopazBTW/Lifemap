@@ -47,6 +47,10 @@ export default function RootLayout() {
               options={{ presentation: 'modal' }}
             />
             <Stack.Screen
+              name="memory/[id]"
+              options={{ presentation: 'modal' }}
+            />
+            <Stack.Screen
               name="place/new"
               options={{ presentation: 'modal' }}
             />

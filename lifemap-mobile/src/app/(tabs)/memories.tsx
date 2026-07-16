@@ -46,7 +46,9 @@ function MemoryCard({ memory }: { memory: Memory }) {
   const date = memory.occurredAt?.toDate?.();
 
   return (
-    <Pressable>
+    <Pressable
+      onPress={() => router.push({ pathname: '/memory/[id]', params: { id: memory.id } })}
+    >
       <Glass>
         {cover ? (
           <Image

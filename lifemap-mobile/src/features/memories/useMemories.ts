@@ -8,13 +8,14 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { useMemo } from 'react';
 
 import { useSession } from '@/features/auth/session';
 import { db } from '@/shared/lib/firebase';
-import { useLiveCollection } from '@/shared/lib/firestore-live';
+import { useLiveCollection, useLiveDoc } from '@/shared/lib/firestore-live';
 import { compressToDataUri } from '@/shared/lib/image';
 import type {
   Coordinates,
@@ -41,6 +42,30 @@ export function useMemories() {
     ...(data as Omit<Memory, 'id'>),
     id,
   }));
+}
+
+export function useMemory(memoryId: string | undefined) {
+  const ref = useMemo(
+    () => (memoryId ? doc(db, 'memories', memoryId) : null),
+    [memoryId],
+  );
+  return useLiveDoc<Memory>(['memory', memoryId], ref, (id, data) => ({
+    ...(data as Omit<Memory, 'id'>),
+    id,
+  }));
+}
+
+/** Set or move a memory's pin; re-derives the map's country colour from it. */
+export async function updateMemoryLocation(
+  memoryId: string,
+  loc: { coordinates: Coordinates; country: string | null; city: string | null },
+) {
+  await updateDoc(doc(db, 'memories', memoryId), {
+    coordinates: loc.coordinates,
+    country: loc.country,
+    city: loc.city,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export type NewMemoryMedia = {

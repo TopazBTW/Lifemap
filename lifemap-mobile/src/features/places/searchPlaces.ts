@@ -63,3 +63,36 @@ export function usePlaceSearch(query: string) {
     staleTime: 5 * 60_000,
   });
 }
+
+/**
+ * Coordinates → country/city, via Nominatim reverse geocoding (free, keyless).
+ * Used so a memory tagged with the phone's GPS still colours its country on
+ * the map — raw coordinates alone can't do that.
+ */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ country: string | null; city: string | null }> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: 'jsonv2',
+  });
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+      { headers: { 'User-Agent': 'LifeMapAI/1.0 (personal travel journal)' } },
+    );
+    if (!res.ok) return { country: null, city: null };
+    const data = (await res.json()) as {
+      address?: Record<string, string | undefined>;
+    };
+    const a = data.address ?? {};
+    return {
+      country: a.country_code?.toUpperCase() ?? null,
+      city: a.city ?? a.town ?? a.village ?? a.municipality ?? null,
+    };
+  } catch {
+    return { country: null, city: null };
+  }
+}
