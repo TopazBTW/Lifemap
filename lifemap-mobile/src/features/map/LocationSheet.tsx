@@ -3,8 +3,8 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
 import { countryName, flagEmoji } from '@/features/map/geo';
-import { cityKey, setCityMark, useCityMarks } from '@/features/map/useCityMarks';
-import { setCountryMark, useCountryMarks } from '@/features/map/useCountryMarks';
+import { cityKey } from '@/features/map/useCityMarks';
+import { useMarks } from '@/features/map/useMarks';
 import { reverseGeocode } from '@/features/places/searchPlaces';
 import type { Coordinates } from '@/shared/types/domain';
 import { Button, Chip, Glass } from '@/shared/ui';
@@ -29,8 +29,7 @@ export function LocationSheet({
   preset?: { city: string; country: string | null };
   onClose: () => void;
 }) {
-  const { data: countryMarks } = useCountryMarks();
-  const { data: cityMarks } = useCityMarks();
+  const { countries, cities, setCountry, setCity, shared } = useMarks();
   const [resolved, setResolved] = useState<Resolved | null>(
     preset ? { city: preset.city, country: preset.country } : null,
   );
@@ -47,20 +46,20 @@ export function LocationSheet({
   }, [coordinate.lat, coordinate.lng, iso, preset]);
 
   const countryIso = resolved?.country ?? iso;
-  const countryStatus = countryIso ? countryMarks?.countries[countryIso] : undefined;
+  const countryStatus = countryIso ? countries[countryIso] : undefined;
 
   const key =
     resolved?.city && countryIso ? cityKey(resolved.city, countryIso) : null;
-  const cityStatus = key ? cityMarks?.cities[key]?.status : undefined;
+  const cityStatus = key ? cities[key]?.status : undefined;
 
   const markCountry = (status: 'visited' | 'planned') => {
     if (!countryIso) return;
-    setCountryMark(countryIso, countryStatus === status ? null : status);
+    setCountry(countryIso, countryStatus === status ? null : status);
   };
 
   const markCity = (status: 'visited' | 'planned') => {
     if (!key || !resolved?.city) return;
-    setCityMark(
+    setCity(
       key,
       cityStatus === status
         ? null
@@ -124,7 +123,8 @@ export function LocationSheet({
           </View>
 
           <Text className="text-xs leading-4 text-white/35">
-            Tapping an active status clears it. Cities you mark also colour their country.
+            Tapping an active status clears it. Cities you mark also colour their
+            country.{shared ? ' Marks are shared with your partner.' : ''}
           </Text>
         </View>
       </Glass>

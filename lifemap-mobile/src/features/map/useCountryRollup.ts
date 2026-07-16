@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 
-import { useCityMarks } from '@/features/map/useCityMarks';
-import { useCountryMarks } from '@/features/map/useCountryMarks';
+import { useMarks } from '@/features/map/useMarks';
 import { useMemories } from '@/features/memories/useMemories';
 import { usePlaces } from '@/features/places/usePlaces';
 import type { CountryEntry, CountryRollup } from '@/shared/types/domain';
@@ -20,8 +19,7 @@ import type { CountryEntry, CountryRollup } from '@/shared/types/domain';
 export function useCountryRollup(): { data: CountryRollup | null } {
   const { data: places = [] } = usePlaces();
   const { data: memories = [] } = useMemories();
-  const { data: marks } = useCountryMarks();
-  const { data: cityMarks } = useCityMarks();
+  const { countries: countryMarks, cities: cityMarks } = useMarks();
 
   const data = useMemo<CountryRollup | null>(() => {
     const countries: Record<string, CountryEntry> = {};
@@ -54,12 +52,12 @@ export function useCountryRollup(): { data: CountryRollup | null } {
       e.status = 'visited';
     }
 
-    for (const [iso, status] of Object.entries(marks?.countries ?? {})) {
+    for (const [iso, status] of Object.entries(countryMarks)) {
       raise(entry(iso), status);
     }
 
     // A marked city raises its country's status too, so it shows when zoomed out.
-    for (const mark of Object.values(cityMarks?.cities ?? {})) {
+    for (const mark of Object.values(cityMarks)) {
       if (mark.country) raise(entry(mark.country), mark.status);
     }
 
@@ -68,7 +66,7 @@ export function useCountryRollup(): { data: CountryRollup | null } {
       countries,
       updatedAt: null as never,
     };
-  }, [places, memories, marks, cityMarks]);
+  }, [places, memories, countryMarks, cityMarks]);
 
   return { data };
 }

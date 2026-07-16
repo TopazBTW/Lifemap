@@ -11,7 +11,8 @@ import {
   useBucketList,
   useMySpace,
 } from '@/features/couple/useSharedSpace';
-import type { BucketListItem } from '@/shared/types/domain';
+import { auth } from '@/shared/lib/firebase';
+import type { BucketListItem, SharedSpace } from '@/shared/types/domain';
 import { Button, Glass, Input, Screen } from '@/shared/ui';
 
 export default function CoupleScreen() {
@@ -94,9 +95,15 @@ function NoSpaceView() {
 
 // ─── In a space ───────────────────────────────────────────────────────────────
 
-function SpaceView({ space }: { space: { id: string; name: string; inviteCode?: string; memberIds: string[] } }) {
+function SpaceView({ space }: { space: SharedSpace }) {
   const { data: items = [] } = useBucketList(space.id);
   const [title, setTitle] = useState('');
+  const myUid = auth.currentUser?.uid;
+
+  const authorLabel = (uid: string) => {
+    if (uid === myUid) return 'You';
+    return space.memberNames?.[uid] ?? 'Partner';
+  };
 
   return (
     <FlatList
@@ -160,7 +167,13 @@ function SpaceView({ space }: { space: { id: string; name: string; inviteCode?: 
           </Glass>
         </View>
       }
-      renderItem={({ item }) => <BucketRow item={item} />}
+      renderItem={({ item }) => (
+        <BucketRow
+          item={item}
+          author={authorLabel(item.createdBy)}
+          mine={item.createdBy === myUid}
+        />
+      )}
       ListEmptyComponent={
         <Text className="px-2 pt-4 text-center text-sm text-white/40">
           Nothing on your list yet. Add somewhere you both want to go.
@@ -170,7 +183,15 @@ function SpaceView({ space }: { space: { id: string; name: string; inviteCode?: 
   );
 }
 
-function BucketRow({ item }: { item: BucketListItem }) {
+function BucketRow({
+  item,
+  author,
+  mine,
+}: {
+  item: BucketListItem;
+  author: string;
+  mine: boolean;
+}) {
   return (
     <Pressable
       onPress={() => toggleBucketItem(item.id, !item.done)}
@@ -185,13 +206,32 @@ function BucketRow({ item }: { item: BucketListItem }) {
           >
             {item.done ? <Text className="text-xs text-white">✓</Text> : null}
           </View>
-          <Text
-            className={`flex-1 text-base ${
-              item.done ? 'text-white/40 line-through' : 'text-white'
-            }`}
-          >
-            {item.title}
-          </Text>
+          <View className="flex-1 gap-0.5">
+            <Text
+              className={`text-base ${
+                item.done ? 'text-white/40 line-through' : 'text-white'
+              }`}
+            >
+              {item.title}
+            </Text>
+            {/* Attribution chip — who added this. */}
+            <View className="flex-row">
+              <View
+                className={`rounded-pill px-2 py-0.5 ${
+                  mine ? 'bg-horizon-500/25' : 'bg-white/10'
+                }`}
+              >
+                <Text
+                  className={`text-[10px] font-medium ${
+                    mine ? 'text-horizon-300' : 'text-white/55'
+                  }`}
+                >
+                  {mine ? '● ' : '○ '}
+                  {author}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
       </Glass>
     </Pressable>

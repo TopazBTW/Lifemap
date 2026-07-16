@@ -50,6 +50,10 @@ export function useMySpace() {
   return { space: data[0] ?? null, ...rest };
 }
 
+function myName(): string {
+  return auth.currentUser?.displayName?.trim() || 'Partner';
+}
+
 /** Create a space and its invite-code lookup. */
 export async function createSpace(name: string): Promise<void> {
   const uid = auth.currentUser?.uid;
@@ -60,6 +64,7 @@ export async function createSpace(name: string): Promise<void> {
     ownerId: uid,
     name: name.trim() || 'Our Space',
     memberIds: [uid],
+    memberNames: { [uid]: myName() },
     inviteCode,
     createdAt: serverTimestamp(),
   });
@@ -83,6 +88,7 @@ export async function joinSpace(code: string): Promise<void> {
   const spaceId = invite.get('spaceId') as string;
   await updateDoc(doc(db, 'sharedSpaces', spaceId), {
     memberIds: arrayUnion(uid),
+    [`memberNames.${uid}`]: myName(),
   });
 }
 

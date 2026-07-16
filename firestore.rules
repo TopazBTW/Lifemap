@@ -173,13 +173,20 @@ service cloud.firestore {
         (uid() in resource.data.memberIds
           && request.resource.data.memberIds == resource.data.memberIds)
         ||
-        // A non-member joining: may only append themselves; nothing else moves.
+        // A non-member joining: may only append themselves and their name;
+        // owner, name and invite code stay put.
         (!(uid() in resource.data.memberIds)
           && request.resource.data.memberIds == resource.data.memberIds.concat([uid()])
           && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.name == resource.data.name
           && request.resource.data.inviteCode == resource.data.inviteCode)
       );
       allow delete: if signedIn() && resource.data.ownerId == uid();
+    }
+
+    // Shared visited/planned marks — any space member reads and writes.
+    match /spaceMarks/{spaceId} {
+      allow read, write: if isSpaceMember(spaceId);
     }
 
     // Invite-code → spaceId lookup. Readable by any signed-in user (you must

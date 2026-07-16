@@ -12,8 +12,8 @@ import {
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
 import { countryAt, countryName, flagEmoji } from '@/features/map/geo';
 import { LocationSheet } from '@/features/map/LocationSheet';
+import { useMarks } from '@/features/map/useMarks';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
-import { useCityMarks } from '@/features/map/useCityMarks';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
 import { useMapFocus } from '@/features/map/useMapFocus';
 import { useMemories } from '@/features/memories/useMemories';
@@ -55,7 +55,7 @@ export default function WorldMapScreen() {
   const { data: food = [] } = useFoodEntries();
   const { data: stays = [] } = useStayEntries();
   const { data: rollup } = useCountryRollup();
-  const { data: cityMarks } = useCityMarks();
+  const { cities: cityMarksMap } = useMarks();
 
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [tapped, setTapped] = useState<TappedLocation | null>(null);
@@ -101,8 +101,8 @@ export default function WorldMapScreen() {
     [stays, layers.food],
   );
   const markedCities = useMemo(
-    () => (layers.cities ? Object.entries(cityMarks?.cities ?? {}) : []),
-    [cityMarks, layers.cities],
+    () => (layers.cities ? Object.entries(cityMarksMap) : []),
+    [cityMarksMap, layers.cities],
   );
 
   // Zoom-aware detail: countries → cities → individual pins as you zoom in.

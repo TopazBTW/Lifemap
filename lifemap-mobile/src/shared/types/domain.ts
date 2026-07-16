@@ -295,8 +295,16 @@ export type SharedSpace = {
   ownerId: string;
   name: string;
   memberIds: string[];
+  /** uid → display name, so items can be attributed to a person. */
+  memberNames?: Record<string, string>;
   inviteCode?: string;
   createdAt: Timestamp;
+};
+
+/** Visited/planned marks shared by everyone in a space (couple mode). */
+export type SpaceMarks = {
+  countries: Record<CountryCode, 'visited' | 'planned'>;
+  cities: Record<string, CityMark>;
 };
 
 export type BucketListItem = {
