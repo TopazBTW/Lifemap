@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Cloud Functions build output
+functions/lib/
+
+# Secrets / local env — .env holds Firebase + Mapbox config, never commit it
+.env
+.env.*
+!.env.example
+*.local
+
+# Firebase emulator/debug artifacts
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
