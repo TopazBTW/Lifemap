@@ -235,7 +235,10 @@ export async function extractPlacesFromCaption(
     const query = [raw.name, raw.city, raw.country].filter(Boolean).join(', ');
 
     let coordinates: Coordinates | null = null;
-    let country = raw.country ?? null;
+    // Country comes only from the geocoder (authoritative ISO code); the
+    // model's country is a full name like "Thailand" and is used only as a
+    // search hint, never stored.
+    let country: string | null = null;
     let city = raw.city ?? null;
 
     const google = await geocodeViaGoogle(query);
