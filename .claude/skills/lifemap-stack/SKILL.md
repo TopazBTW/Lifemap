@@ -82,9 +82,13 @@ in-memory persistence and silently signs users out on every cold start.
 ## Non-negotiables
 
 - **Secrets.** `EXPO_PUBLIC_*` is inlined into the bundle and readable by anyone
-  who downloads the app. The Gemini key lives in Cloud Functions only. Mapbox:
-  `pk.*` public token in the app, `sk.*` download token build-time only.
+  who downloads the app. The Gemini key lives in Cloud Functions only.
+- **No Mapbox anywhere** (2026-07-16: requires billing info the owner won't
+  provide). Maps are `react-native-maps` (Apple Maps on iOS — bundled in Expo
+  Go, no token); geocoding is Nominatim in `functions/src/geocode.ts` (1 req/s
+  throttle + User-Agent are load-bearing, not optional).
 - **GeoJSON is `[lng, lat]`.** Use `toGeoJSONPosition()` from
   `src/shared/types/domain.ts`. Swapping these puts pins in the ocean.
-- **Country fills are one data-driven `match` expression**, not a layer per
-  country — see `src/features/map/countryPaint.ts` for why.
+- **Country fills render only rollup countries** as native `<Polygon>` overlays
+  from the bundled Natural Earth GeoJSON — see
+  `src/features/map/countryPaint.ts`. Never render all 175 countries.

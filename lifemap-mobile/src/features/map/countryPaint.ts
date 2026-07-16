@@ -1,4 +1,8 @@
+import type { LatLng } from 'react-native-maps';
+
 import type { CountryRollup, CountryStatus } from '@/shared/types/domain';
+
+import worldCountries from './world-countries.json';
 
 /**
  * Country fill colours, keyed by rollup status. Mirrors tailwind.config.js
@@ -10,37 +14,66 @@ export const COUNTRY_COLORS: Record<Exclude<CountryStatus, 'none'>, string> = {
   saved: '#2E88E4',
 };
 
-const TRANSPARENT = 'rgba(0,0,0,0)';
+/** 40% alpha fills so the basemap labels stay legible underneath. */
+const FILL_ALPHA = '66';
+
+type CountryFeature = {
+  properties: { iso: string };
+  geometry:
+    | { type: 'Polygon'; coordinates: number[][][] }
+    | { type: 'MultiPolygon'; coordinates: number[][][][] };
+};
+
+export type CountryFill = {
+  key: string;
+  iso: string;
+  color: string;
+  /** Outer ring in react-native-maps LatLng order. */
+  coordinates: LatLng[];
+  /** Inner rings (e.g. Lesotho inside South Africa). */
+  holes: LatLng[][];
+};
+
+const FEATURES = (worldCountries as { features: CountryFeature[] }).features;
+
+// GeoJSON rings are [lng, lat]; react-native-maps wants {latitude, longitude}.
+function ringToLatLng(ring: number[][]): LatLng[] {
+  return ring.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+}
 
 /**
- * Build the fill-color expression for the world map's country layer.
+ * Build the <Polygon> fills for the world map.
  *
- * One data-driven `match` over `iso_3166_1`, **not** a layer per country:
- * Mapbox evaluates a match in the GPU style pass, whereas 50 filtered layers
- * mean 50 style-layer traversals per frame and a visible hitch on mid-range
- * Android as soon as a user has real travel history. This also lets a rollup
- * update repaint the whole world with a single setStyle diff.
+ * Unlike the Mapbox build (one GPU `match` expression over a vector tileset),
+ * Apple Maps gets native polygon overlays — so we only materialise countries
+ * that actually appear in the rollup. A typical user paints 5–40 countries,
+ * not 175, which keeps the overlay count trivial.
  */
-export function countryFillExpression(rollup: CountryRollup | null | undefined) {
-  const pairs: (string | string[])[] = [];
+export function countryFills(rollup: CountryRollup | null | undefined): CountryFill[] {
+  if (!rollup) return [];
 
-  if (rollup) {
-    for (const [iso, entry] of Object.entries(rollup.countries)) {
-      if (entry.status === 'none') continue;
-      pairs.push(iso, COUNTRY_COLORS[entry.status]);
+  const fills: CountryFill[] = [];
+
+  for (const feature of FEATURES) {
+    const entry = rollup.countries[feature.properties.iso];
+    if (!entry || entry.status === 'none') continue;
+
+    const color = COUNTRY_COLORS[entry.status] + FILL_ALPHA;
+    const polygons =
+      feature.geometry.type === 'Polygon'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+
+    for (const [i, rings] of polygons.entries()) {
+      fills.push({
+        key: `${feature.properties.iso}-${i}`,
+        iso: feature.properties.iso,
+        color,
+        coordinates: ringToLatLng(rings[0]),
+        holes: rings.slice(1).map(ringToLatLng),
+      });
     }
   }
 
-  // `match` needs at least one branch; degenerate rollups fall back to a
-  // constant so we never hand Mapbox an invalid expression.
-  if (pairs.length === 0) return TRANSPARENT;
-
-  return ['match', ['get', 'iso_3166_1'], ...pairs, TRANSPARENT];
+  return fills;
 }
-
-/** Worldview filter: render each country once, using the US worldview. */
-export const WORLDVIEW_FILTER = [
-  'all',
-  ['==', ['get', 'disputed'], 'false'],
-  ['any', ['==', 'all', ['get', 'worldview']], ['in', 'US', ['get', 'worldview']]],
-];

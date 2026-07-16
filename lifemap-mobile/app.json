@@ -39,13 +39,6 @@
         }
       ],
       [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxMapsDownloadToken": "$(MAPBOX_DOWNLOAD_TOKEN)"
-        }
-      ],
-      [
         "expo-location",
         {
           "locationWhenInUsePermission": "LifeMap shows your position on your world map and tracks your runs."

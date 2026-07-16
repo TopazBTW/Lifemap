@@ -17,7 +17,6 @@ const db = getFirestore();
 
 // Secrets live in Secret Manager, never in the app bundle or in code.
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
-const MAPBOX_GEOCODING_TOKEN = defineSecret('MAPBOX_GEOCODING_TOKEN');
 const INSTAGRAM_OEMBED_TOKEN = defineSecret('INSTAGRAM_OEMBED_TOKEN');
 
 /**
@@ -31,7 +30,7 @@ const INSTAGRAM_OEMBED_TOKEN = defineSecret('INSTAGRAM_OEMBED_TOKEN');
 export const onReelCreated = onDocumentCreated(
   {
     document: 'reels/{reelId}',
-    secrets: [GEMINI_API_KEY, MAPBOX_GEOCODING_TOKEN, INSTAGRAM_OEMBED_TOKEN],
+    secrets: [GEMINI_API_KEY, INSTAGRAM_OEMBED_TOKEN],
     timeoutSeconds: 300,
     memory: '512MiB',
   },
@@ -58,9 +57,9 @@ export const onReelCreated = onDocumentCreated(
 
       const extraction = await extractPlaces(resolved);
 
-      // Geocode each named place. Sequential rather than parallel: Mapbox's
-      // free tier is 600 req/min and a burst of 20 from every import would
-      // trip it under modest load.
+      // Geocode each named place. Sequential rather than parallel: Nominatim
+      // allows 1 req/s (throttled inside geocode.ts), so a burst of 20 from
+      // a single import must queue, not fan out.
       const places = [];
       for (const place of extraction.places) {
         const hit = await geocode(place.name, { country: place.country });
@@ -121,7 +120,7 @@ const commitSchema = z.object({
  * atomically with the writes.
  */
 export const commitReelPlaces = onCall(
-  { secrets: [MAPBOX_GEOCODING_TOKEN], timeoutSeconds: 120 },
+  { timeoutSeconds: 120 },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');

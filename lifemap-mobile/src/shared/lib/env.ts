@@ -3,8 +3,8 @@
  *
  * EXPO_PUBLIC_* values are inlined into the JS bundle and readable by anyone
  * who downloads the app — never put a secret here. The Gemini key lives in
- * Cloud Functions; Mapbox uses a pk.* public token here and the sk.* download
- * token only at build time (app.json plugin).
+ * Cloud Functions only. Maps are Apple/Google via react-native-maps and
+ * geocoding is Nominatim — neither needs a client token.
  */
 
 function required(name: string, value: string | undefined): string {
@@ -43,9 +43,4 @@ export const env = {
       process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
     ),
   },
-  /** pk.* public token — scoped to styles:read, fonts:read. */
-  mapboxPublicToken: required(
-    'EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN',
-    process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
-  ),
 } as const;

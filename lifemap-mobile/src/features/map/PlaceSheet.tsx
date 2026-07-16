@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 
-import { KIND_EMOJI } from '@/features/map/placesToGeoJSON';
+import { KIND_EMOJI } from '@/features/places/kinds';
 import { deletePlace, setPlaceStatus } from '@/features/places/usePlaces';
 import type { Place, PlaceStatus } from '@/shared/types/domain';
 import { Button, Chip, Glass } from '@/shared/ui';

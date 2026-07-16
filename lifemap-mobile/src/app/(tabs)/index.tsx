@@ -1,39 +1,29 @@
-import Mapbox, {
-  Camera,
-  CircleLayer,
-  FillLayer,
-  MapView,
-  ShapeSource,
-  SymbolLayer,
-  VectorSource,
-} from '@rnmapbox/maps';
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
+import MapView, { Marker, Polygon } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  countryFillExpression,
-  COUNTRY_COLORS,
-  WORLDVIEW_FILTER,
-} from '@/features/map/countryPaint';
+import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
-import { placesToGeoJSON } from '@/features/map/placesToGeoJSON';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
+import { KIND_EMOJI } from '@/features/places/kinds';
 import { usePlaces } from '@/features/places/usePlaces';
-import { env } from '@/shared/lib/env';
 import type { Place } from '@/shared/types/domain';
 import { Glass } from '@/shared/ui';
 
-Mapbox.setAccessToken(env.mapboxPublicToken);
-
+/**
+ * World Life Map on react-native-maps (Apple Maps on iOS) — runs in Expo Go
+ * with no API keys. Country fills come from the server-maintained rollup,
+ * rendered as native polygon overlays for just the countries the user has
+ * touched (see countryPaint.ts).
+ */
 export default function WorldMapScreen() {
   const insets = useSafeAreaInsets();
   const { data: places = [] } = usePlaces();
   const { data: rollup } = useCountryRollup();
   const [selected, setSelected] = useState<Place | null>(null);
 
-  const pinsGeoJSON = useMemo(() => placesToGeoJSON(places), [places]);
-  const fillColor = useMemo(() => countryFillExpression(rollup), [rollup]);
+  const fills = useMemo(() => countryFills(rollup), [rollup]);
 
   const stats = useMemo(() => {
     const counts = { visited: 0, planned: 0, saved: 0 };
@@ -47,71 +37,48 @@ export default function WorldMapScreen() {
     <View className="flex-1 bg-ink-950">
       <MapView
         style={{ flex: 1 }}
-        styleURL={Mapbox.StyleURL.Dark}
-        logoEnabled={false}
-        attributionPosition={{ bottom: 8, left: 8 }}
-        scaleBarEnabled={false}
+        userInterfaceStyle="dark"
+        initialRegion={{
+          latitude: 25,
+          longitude: 10,
+          latitudeDelta: 100,
+          longitudeDelta: 120,
+        }}
+        onPress={() => setSelected(null)}
+        showsPointsOfInterests={false}
+        toolbarEnabled={false}
+        rotateEnabled={false}
+        pitchEnabled={false}
       >
-        <Camera
-          defaultSettings={{ centerCoordinate: [10, 25], zoomLevel: 1.2 }}
-          animationMode="none"
-        />
+        {fills.map((fill) => (
+          <Polygon
+            key={fill.key}
+            coordinates={fill.coordinates}
+            holes={fill.holes.length ? fill.holes : undefined}
+            fillColor={fill.color}
+            strokeColor="rgba(255,255,255,0.18)"
+            strokeWidth={1}
+          />
+        ))}
 
-        {/* Country fills from the server-maintained rollup. */}
-        <VectorSource id="countries" url="mapbox://mapbox.country-boundaries-v1">
-          <FillLayer
-            id="country-fills"
-            sourceLayerID="country_boundaries"
-            filter={WORLDVIEW_FILTER as never}
-            style={{
-              fillColor: fillColor as never,
-              fillOpacity: 0.32,
+        {places.map((place) => (
+          <Marker
+            key={place.id}
+            coordinate={{
+              latitude: place.coordinates.lat,
+              longitude: place.coordinates.lng,
             }}
-          />
-        </VectorSource>
-
-        {/* Saved-place pins, clustered so dense cities stay readable. */}
-        <ShapeSource
-          id="places"
-          shape={pinsGeoJSON}
-          cluster
-          clusterRadius={44}
-          onPress={(e) => {
-            const feature = e.features[0];
-            const id = feature?.properties?.id as string | undefined;
-            if (!id) return; // cluster tap — let the camera handle it
-            const place = places.find((p) => p.id === id);
-            if (place) setSelected(place);
-          }}
-        >
-          <CircleLayer
-            id="place-clusters"
-            filter={['has', 'point_count']}
-            style={{
-              circleColor: COUNTRY_COLORS.saved,
-              circleOpacity: 0.85,
-              circleRadius: ['step', ['get', 'point_count'], 14, 10, 18, 25, 24] as never,
+            // Emoji markers re-render once, then freeze — without this Android
+            // re-rasterises every marker on every frame.
+            tracksViewChanges={false}
+            onPress={(e) => {
+              e.stopPropagation();
+              setSelected(place);
             }}
-          />
-          <SymbolLayer
-            id="place-cluster-count"
-            filter={['has', 'point_count']}
-            style={{
-              textField: ['get', 'point_count_abbreviated'] as never,
-              textSize: 12,
-              textColor: '#FFFFFF',
-            }}
-          />
-          <SymbolLayer
-            id="place-pins"
-            filter={['!', ['has', 'point_count']]}
-            style={{
-              textField: ['get', 'emoji'] as never,
-              textSize: 22,
-              textAllowOverlap: true,
-            }}
-          />
-        </ShapeSource>
+          >
+            <Text style={{ fontSize: 26 }}>{KIND_EMOJI[place.kind] ?? '📍'}</Text>
+          </Marker>
+        ))}
       </MapView>
 
       {/* Stats header */}

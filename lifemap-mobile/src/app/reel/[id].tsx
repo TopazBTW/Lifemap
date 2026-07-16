@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 
-import { KIND_EMOJI } from '@/features/map/placesToGeoJSON';
+import { KIND_EMOJI } from '@/features/places/kinds';
 import { deleteReel, useCommitReelPlaces, useReel } from '@/features/reels/useReels';
 import type { ExtractedPlace } from '@/shared/types/domain';
 import { Button, Glass, Screen } from '@/shared/ui';
