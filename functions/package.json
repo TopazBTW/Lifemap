@@ -1,0 +1,28 @@
+{
+  "name": "lifemap-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LifeMap AI Cloud Functions — reel extraction, geocoding, rollups.",
+  "main": "lib/index.js",
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "serve": "npm run build && firebase emulators:start --only functions,firestore,auth,storage",
+    "deploy": "npm run build && firebase deploy --only functions"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@google/genai": "^2.11.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  }
+}

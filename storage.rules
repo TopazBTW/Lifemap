@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Media for memory capsules. Path convention: users/{uid}/memories/{memoryId}/{file}
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Cap uploads and pin content types at the edge: without this, any signed-in
+      // user can burn your storage bill with arbitrary files.
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 200 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('video/.*') ||
+          request.resource.contentType.matches('audio/.*')
+        );
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,183 @@
+rules_version = '2';
+
+// LifeMap AI — Firestore security rules.
+//
+// Model: every document carries `ownerId`. A user reads/writes their own data;
+// shared-space (couple mode) docs are additionally readable by space members.
+//
+// Rule of thumb enforced throughout: the client may never set `ownerId` to
+// anyone but itself, and may never change it after creation. Server-derived
+// fields (aiConfidence, status transitions on reels) are function-only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function owns(resource) {
+      return signedIn() && resource.data.ownerId == uid();
+    }
+
+    function creatingOwn() {
+      return signedIn() && request.resource.data.ownerId == uid();
+    }
+
+    // ownerId must never change on update.
+    function ownerUnchanged() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    // Membership is read from the space doc, not from client-supplied claims.
+    function isSpaceMember(spaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/sharedSpaces/$(spaceId))
+        && uid() in get(/databases/$(database)/documents/sharedSpaces/$(spaceId)).data.memberIds;
+    }
+
+    function sharedWithMe(resource) {
+      return resource.data.get('sharedSpaceId', null) != null
+        && isSpaceMember(resource.data.sharedSpaceId);
+    }
+
+    // ─── Users ──────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn() && (uid() == userId || isPartnerOf(userId));
+      allow create: if signedIn() && uid() == userId;
+      // A user must not be able to grant themselves membership by writing
+      // sharedSpaceIds directly — joining a space goes through a function.
+      allow update: if signedIn() && uid() == userId
+        && request.resource.data.sharedSpaceIds == resource.data.sharedSpaceIds;
+      allow delete: if false;
+
+      function isPartnerOf(otherId) {
+        return exists(/databases/$(database)/documents/users/$(otherId))
+          && get(/databases/$(database)/documents/users/$(otherId))
+               .data.get('sharedSpaceIds', []).hasAny(
+                 get(/databases/$(database)/documents/users/$(uid()))
+                   .data.get('sharedSpaceIds', [])
+               );
+      }
+    }
+
+    // ─── Places ─────────────────────────────────────────────────────────────
+    match /places/{placeId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    // ─── Reels ──────────────────────────────────────────────────────────────
+    match /reels/{reelId} {
+      allow read: if owns(resource);
+      // The client may only ever create a reel in `pending`. Every later state
+      // is written by onReelCreated (Admin SDK bypasses rules), so a client
+      // cannot fake an extraction result.
+      allow create: if creatingOwn()
+        && request.resource.data.status == 'pending'
+        && !('extraction' in request.resource.data);
+      // Deleting is the only client-side mutation we allow post-creation.
+      allow update: if false;
+      allow delete: if owns(resource);
+    }
+
+    // ─── Memories ───────────────────────────────────────────────────────────
+    match /memories/{memoryId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    // ─── Trips / goals / runs / passports ───────────────────────────────────
+    match /trips/{tripId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    match /goals/{goalId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    match /runs/{runId} {
+      allow read: if owns(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    match /foodEntries/{entryId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    match /stayEntries/{entryId} {
+      allow read: if owns(resource) || sharedWithMe(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    match /itineraries/{itineraryId} {
+      allow read: if owns(resource);
+      allow create: if creatingOwn();
+      allow update: if owns(resource) && ownerUnchanged();
+      allow delete: if owns(resource);
+    }
+
+    // ─── Server-maintained projections ──────────────────────────────────────
+    // Read-only to clients: written exclusively by Cloud Functions. If a client
+    // could write these it could paint any country visited, and the timeline
+    // would stop matching its source documents.
+    match /timelineEntries/{entryId} {
+      allow read: if owns(resource);
+      allow write: if false;
+    }
+
+    match /countryRollups/{userId} {
+      allow read: if signedIn() && uid() == userId;
+      allow write: if false;
+    }
+
+    // ─── Couple mode ────────────────────────────────────────────────────────
+    match /sharedSpaces/{spaceId} {
+      allow read: if signedIn() && uid() in resource.data.memberIds;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == uid()
+        && request.resource.data.memberIds == [uid()];
+      // Membership changes go through a function (invite code redemption), so a
+      // member cannot silently add a third party or remove their partner.
+      allow update: if signedIn()
+        && uid() in resource.data.memberIds
+        && request.resource.data.memberIds == resource.data.memberIds;
+      allow delete: if signedIn() && resource.data.ownerId == uid();
+    }
+
+    match /bucketListItems/{itemId} {
+      allow read: if isSpaceMember(resource.data.sharedSpaceId);
+      allow create: if isSpaceMember(request.resource.data.sharedSpaceId)
+        && request.resource.data.createdBy == uid();
+      allow update: if isSpaceMember(resource.data.sharedSpaceId)
+        && request.resource.data.sharedSpaceId == resource.data.sharedSpaceId;
+      allow delete: if isSpaceMember(resource.data.sharedSpaceId);
+    }
+
+    // Deny anything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
