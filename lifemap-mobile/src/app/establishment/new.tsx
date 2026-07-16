@@ -108,11 +108,11 @@ export default function NewEstablishmentScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 3,
+      selectionLimit: 8,
       quality: 0.85,
     });
     if (result.canceled) return;
-    setPhotoUris((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, 3));
+    setPhotoUris((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, 8));
   };
 
   const save = async () => {
@@ -299,7 +299,7 @@ export default function NewEstablishmentScreen() {
 
         <View className="gap-2">
           <Text className="text-xs font-medium uppercase tracking-wider text-white/50">
-            Your photos (up to 3)
+            Your photos (up to 8)
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {photoUris.map((uri, i) => (

@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   orderBy,
   query,
   serverTimestamp,
@@ -16,7 +17,7 @@ import { useMemo } from 'react';
 import { useSession } from '@/features/auth/session';
 import { db } from '@/shared/lib/firebase';
 import { useLiveCollection, useLiveDoc } from '@/shared/lib/firestore-live';
-import { compressToDataUri } from '@/shared/lib/image';
+import { deleteImage, uploadImage } from '@/shared/lib/storage';
 import type {
   Coordinates,
   Memory,
@@ -76,13 +77,11 @@ export type NewMemoryMedia = {
 };
 
 /**
- * Photos are stored **inline in the Firestore doc** as compressed JPEG data
- * URIs, not in Firebase Storage — Storage requires the paid Blaze plan and
- * this project runs on the free tier. At 900px / q0.55 a photo lands around
- * 60–150 KB; MAX_PHOTOS keeps the doc safely under Firestore's 1 MiB limit.
- * If the project ever moves to Blaze, swap this for real Storage uploads.
+ * Photos upload to Firebase Storage (see src/shared/lib/storage.ts); the doc
+ * stores each media's `storagePath` + tokenised `downloadUrl`. Older memories
+ * with inline base64 `downloadUrl`s still render, so no migration is needed.
  */
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 8;
 
 type CreateMemoryArgs = {
   title: string;
@@ -107,18 +106,24 @@ export function useCreateMemory() {
         .filter((m) => m.type === 'photo')
         .slice(0, MAX_PHOTOS);
 
+      // Pre-allocate the id so media lives under a stable per-memory path.
+      const memoryRef = doc(collection(db, 'memories'));
+
       const media: MemoryMedia[] = [];
-      for (const item of photos) {
+      for (const [i, item] of photos.entries()) {
+        const { downloadUrl, storagePath } = await uploadImage(
+          item.uri,
+          `users/${user.uid}/memories/${memoryRef.id}/${i}.jpg`,
+        );
         media.push({
-          storagePath: 'inline',
-          downloadUrl: await compressToDataUri(item.uri),
+          storagePath,
+          downloadUrl,
           type: 'photo',
           width: item.width,
           height: item.height,
         });
       }
 
-      const memoryRef = doc(collection(db, 'memories'));
       await setDoc(memoryRef, {
         ownerId: user.uid,
         title: args.title,
@@ -142,5 +147,10 @@ export function useCreateMemory() {
 }
 
 export async function deleteMemory(memoryId: string) {
-  await deleteDoc(doc(db, 'memories', memoryId));
+  const ref = doc(db, 'memories', memoryId);
+  // Remove the Storage objects before the doc so we don't orphan them.
+  const snap = await getDoc(ref);
+  const media = (snap.data()?.media ?? []) as MemoryMedia[];
+  await Promise.all(media.map((m) => deleteImage(m.storagePath)));
+  await deleteDoc(ref);
 }

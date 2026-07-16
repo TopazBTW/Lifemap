@@ -40,7 +40,7 @@ export default function NewMemoryScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 3,
+      selectionLimit: 8,
       quality: 0.85,
     });
     if (result.canceled) return;
@@ -53,7 +53,7 @@ export default function NewMemoryScreen() {
           width: a.width,
           height: a.height,
         })),
-      ].slice(0, 3),
+      ].slice(0, 8),
     );
   };
 
@@ -157,7 +157,7 @@ export default function NewMemoryScreen() {
 
         <View className="gap-2">
           <Text className="text-xs font-medium uppercase tracking-wider text-white/50">
-            Photos (up to 3)
+            Photos (up to 8)
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {media.map((m, i) => (

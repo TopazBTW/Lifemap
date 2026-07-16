@@ -1,11 +1,11 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   where,
 } from 'firebase/firestore';
@@ -14,7 +14,7 @@ import { useMemo } from 'react';
 import { useSession } from '@/features/auth/session';
 import { auth, db } from '@/shared/lib/firebase';
 import { useLiveCollection } from '@/shared/lib/firestore-live';
-import { compressToDataUri } from '@/shared/lib/image';
+import { deleteFolder, uploadImage } from '@/shared/lib/storage';
 import type {
   Coordinates,
   FoodEntry,
@@ -75,21 +75,27 @@ export type EstablishmentDraft = {
   kind?: StayKind;
 };
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 8;
 
-async function compressPhotos(uris: string[]): Promise<string[]> {
-  const photos: string[] = [];
-  for (const uri of uris.slice(0, MAX_PHOTOS)) {
-    photos.push(await compressToDataUri(uri));
+/** Upload the user's photos to Storage and return their download URLs. */
+async function uploadPhotos(uris: string[], prefix: string): Promise<string[]> {
+  const urls: string[] = [];
+  for (const [i, uri] of uris.slice(0, MAX_PHOTOS).entries()) {
+    const { downloadUrl } = await uploadImage(uri, `${prefix}/${i}.jpg`);
+    urls.push(downloadUrl);
   }
-  return photos;
+  return urls;
 }
 
 export async function addFoodEntry(draft: EstablishmentDraft): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('Not signed in.');
-  const photos = await compressPhotos(draft.photoUris);
-  await addDoc(collection(db, 'foodEntries'), {
+  const ref = doc(collection(db, 'foodEntries'));
+  const photos = await uploadPhotos(
+    draft.photoUris,
+    `users/${uid}/food/${ref.id}`,
+  );
+  await setDoc(ref, {
     ownerId: uid,
     restaurantName: draft.name,
     dish: draft.dish?.trim() || null,
@@ -111,8 +117,12 @@ export async function addFoodEntry(draft: EstablishmentDraft): Promise<void> {
 export async function addStayEntry(draft: EstablishmentDraft): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('Not signed in.');
-  const photos = await compressPhotos(draft.photoUris);
-  await addDoc(collection(db, 'stayEntries'), {
+  const ref = doc(collection(db, 'stayEntries'));
+  const photos = await uploadPhotos(
+    draft.photoUris,
+    `users/${uid}/stay/${ref.id}`,
+  );
+  await setDoc(ref, {
     ownerId: uid,
     name: draft.name,
     kind: draft.kind ?? 'hotel',
@@ -133,9 +143,13 @@ export async function addStayEntry(draft: EstablishmentDraft): Promise<void> {
 }
 
 export async function deleteFoodEntry(id: string) {
+  const uid = auth.currentUser?.uid;
+  if (uid) await deleteFolder(`users/${uid}/food/${id}`);
   await deleteDoc(doc(db, 'foodEntries', id));
 }
 
 export async function deleteStayEntry(id: string) {
+  const uid = auth.currentUser?.uid;
+  if (uid) await deleteFolder(`users/${uid}/stay/${id}`);
   await deleteDoc(doc(db, 'stayEntries', id));
 }
