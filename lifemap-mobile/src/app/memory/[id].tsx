@@ -47,7 +47,7 @@ export default function MemoryDetailScreen() {
 
   const showOnMap = () => {
     if (!memory.coordinates) return;
-    focusOn(memory.coordinates);
+    focusOn(memory.coordinates, `mem-${memory.id}`);
     router.dismissAll();
     router.navigate('/');
   };

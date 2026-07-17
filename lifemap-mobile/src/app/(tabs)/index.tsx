@@ -100,9 +100,12 @@ export default function WorldMapScreen() {
 
   const mapRef = useRef<MapView>(null);
   const focusTarget = useMapFocus((s) => s.target);
-  const clearFocus = useMapFocus((s) => s.clear);
+  const clearTarget = useMapFocus((s) => s.clearTarget);
+  const highlightId = useMapFocus((s) => s.highlightId);
+  const clearHighlight = useMapFocus((s) => s.clearHighlight);
 
-  // "Show on map" from a memory: turn memories on, fly there, clear the signal.
+  // "Show on map" from a memory: turn memories on and fly in close enough that
+  // individual pins (not clusters) render, so the highlighted one is visible.
   useEffect(() => {
     if (!focusTarget) return;
     setLayers((prev) => ({ ...prev, memories: true }));
@@ -110,13 +113,13 @@ export default function WorldMapScreen() {
       {
         latitude: focusTarget.lat,
         longitude: focusTarget.lng,
-        latitudeDelta: 4,
-        longitudeDelta: 4,
+        latitudeDelta: 0.6,
+        longitudeDelta: 0.6,
       },
       800,
     );
-    clearFocus();
-  }, [focusTarget, clearFocus]);
+    clearTarget();
+  }, [focusTarget, clearTarget]);
 
   const mappedMemories = useMemo(
     () => (layers.memories ? allMemories.filter((m) => m.coordinates) : []),
@@ -190,6 +193,7 @@ export default function WorldMapScreen() {
         }}
         onRegionChangeComplete={(r) => setLatDelta(r.latitudeDelta)}
         onPress={(e) => {
+          if (highlightId) clearHighlight();
           if (selectedPlace) {
             setSelectedPlace(null);
             return;
@@ -269,22 +273,41 @@ export default function WorldMapScreen() {
           ))}
 
         {level === 'individual' &&
-          mappedMemories.map((memory) => (
-            <Marker
-              key={`mem-${memory.id}`}
-              coordinate={{ latitude: memory.coordinates!.lat, longitude: memory.coordinates!.lng }}
-              tracksViewChanges={false}
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
-              }}
-            >
-              <PinBadge
-                emoji={MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
-                partner={memory.isPartner}
-              />
-            </Marker>
-          ))}
+          mappedMemories.map((memory) => {
+            const highlighted = highlightId === `mem-${memory.id}`;
+            return (
+              <Marker
+                // Remount on highlight change: tracksViewChanges={false} freezes
+                // the rendered marker, so it wouldn't pick up the callout.
+                key={`mem-${memory.id}-${highlighted}`}
+                coordinate={{ latitude: memory.coordinates!.lat, longitude: memory.coordinates!.lng }}
+                tracksViewChanges={false}
+                zIndex={highlighted ? 10 : undefined}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
+                }}
+              >
+                <View className="items-center">
+                  {highlighted ? (
+                    <View className="mb-0.5 max-w-40 rounded-pill border border-white/25 bg-horizon-500 px-2.5 py-1">
+                      <Text
+                        className="text-[11px] font-semibold text-white"
+                        numberOfLines={1}
+                      >
+                        {memory.title}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <PinBadge
+                    emoji={MOODS.find((x) => x.value === memory.mood)?.emoji ?? '📸'}
+                    partner={memory.isPartner}
+                    highlighted={highlighted}
+                  />
+                </View>
+              </Marker>
+            );
+          })}
 
         {level === 'individual' &&
           mappedFood.map((f) => (
@@ -400,20 +423,32 @@ export default function WorldMapScreen() {
   );
 }
 
-/** A map pin's emoji, wrapped in a colored ring when it's the partner's. */
-function PinBadge({ emoji, partner }: { emoji: string; partner: boolean }) {
-  if (!partner) return <Text style={{ fontSize: 26 }}>{emoji}</Text>;
+/**
+ * A map pin's emoji. Ringed pink when it's the partner's, and ringed + enlarged
+ * when it's the pin the user asked to be shown ("Show on map").
+ */
+function PinBadge({
+  emoji,
+  partner,
+  highlighted = false,
+}: {
+  emoji: string;
+  partner: boolean;
+  highlighted?: boolean;
+}) {
+  if (!partner && !highlighted) return <Text style={{ fontSize: 26 }}>{emoji}</Text>;
+  const ring = partner ? PARTNER_COLOR : '#2E88E4';
   return (
     <View
       style={{
-        padding: 2,
+        padding: highlighted ? 4 : 2,
         borderRadius: 999,
-        borderWidth: 2,
-        borderColor: PARTNER_COLOR,
-        backgroundColor: 'rgba(232,111,176,0.22)',
+        borderWidth: highlighted ? 3 : 2,
+        borderColor: ring,
+        backgroundColor: partner ? 'rgba(232,111,176,0.22)' : 'rgba(46,136,228,0.28)',
       }}
     >
-      <Text style={{ fontSize: 22 }}>{emoji}</Text>
+      <Text style={{ fontSize: highlighted ? 26 : 22 }}>{emoji}</Text>
     </View>
   );
 }
