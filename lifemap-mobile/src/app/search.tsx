@@ -89,7 +89,8 @@ export default function SearchScreen() {
           onPress: () => {
             focusOn(p.coordinates);
             router.dismissAll();
-            router.navigate('/');
+            // See memory/[id]: '/' is ambiguous with the auth index.
+            router.navigate('/(tabs)');
           },
         });
       }

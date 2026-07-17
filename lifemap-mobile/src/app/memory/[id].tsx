@@ -49,7 +49,9 @@ export default function MemoryDetailScreen() {
     if (!memory.coordinates) return;
     focusOn(memory.coordinates, `mem-${memory.id}`);
     router.dismissAll();
-    router.navigate('/');
+    // '/(tabs)', not '/': (auth)/index and (tabs)/index both resolve to '/', so
+    // navigate('/') hits the guarded-off auth route and silently does nothing.
+    router.navigate('/(tabs)');
   };
 
   return (

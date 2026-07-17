@@ -31,6 +31,17 @@ https://docs.expo.dev/versions/v54.0.0/. Consequences:
   `grep -cE '\.#[a-zA-Z]' <bundle>` against the hermes-profile bundle after
   any babel/firebase change.
 
+## Never `router.navigate('/')` — it's ambiguous
+
+`(auth)/index.tsx` and `(tabs)/index.tsx` **both resolve to `/`** (check
+`.expo/types/router.d.ts`: `${'/(auth)'} | '/'` *and* `${'/(tabs)'} | '/'`).
+`navigate('/')` resolves to the auth index, which the signed-in
+`<Stack.Protected>` guard disables — so the call silently does nothing and the
+user just stays put. It typechecks, and there's no runtime error.
+
+Use **`router.navigate('/(tabs)')`** to reach the Map tab. Same trap for any
+future group-root navigation.
+
 ## Firebase Storage uploads must use an XHR Blob
 
 React Native **cannot build a Blob from an ArrayBuffer** — "Creating blobs from
