@@ -31,6 +31,17 @@ https://docs.expo.dev/versions/v54.0.0/. Consequences:
   `grep -cE '\.#[a-zA-Z]' <bundle>` against the hermes-profile bundle after
   any babel/firebase change.
 
+## Every react-native-maps custom Marker needs `tracksViewChanges={false}`
+
+A `<Marker>` with a custom child view defaults to `tracksViewChanges=true`,
+which re-snapshots the view into a bitmap **every frame, forever** — a native
+memory leak that grows until iOS kills the app. The symptom is the app
+*closing completely* while on the map, seemingly at random. Set
+`tracksViewChanges={false}` on **every** custom marker. If the marker's content
+is dynamic, encode that content in its `key` (e.g. `city-${key}-${status}`,
+`${level}-${c.key}-${c.count}`) so it remounts — and re-renders — when the data
+changes, since a frozen marker won't otherwise update.
+
 ## Never `router.navigate('/')` — it's ambiguous
 
 `(auth)/index.tsx` and `(tabs)/index.tsx` **both resolve to `/`** (check

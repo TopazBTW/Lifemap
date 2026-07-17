@@ -247,8 +247,11 @@ export default function WorldMapScreen() {
         {level !== 'country' &&
           markedCities.map(([key, c]) => (
             <Marker
-              key={`city-${key}`}
+              // key encodes status so tracksViewChanges={false} still refreshes
+              // the pill when it changes (see the comment on the cluster marker).
+              key={`city-${key}-${c.status}`}
               coordinate={{ latitude: c.lat, longitude: c.lng }}
+              tracksViewChanges={false}
               onPress={(e) => {
                 e.stopPropagation();
                 setSelectedPlace(null);
@@ -358,8 +361,12 @@ export default function WorldMapScreen() {
 
         {clusters.map((c) => (
           <Marker
-            key={`${level}-${c.key}`}
+            // tracksViewChanges={false} stops iOS re-snapshotting the bubble
+            // every frame (a native memory leak that crashes the map). The
+            // count is in the key so the bubble remounts when it changes.
+            key={`${level}-${c.key}-${c.count}`}
             coordinate={{ latitude: c.lat, longitude: c.lng }}
+            tracksViewChanges={false}
             onPress={(e) => {
               e.stopPropagation();
               zoomToCluster(c.lat, c.lng);
