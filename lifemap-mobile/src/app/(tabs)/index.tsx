@@ -14,6 +14,7 @@ import { useSpaceMemories, useSpacePlaces } from '@/features/couple/useSpaceItem
 import { countryFills, COUNTRY_COLORS } from '@/features/map/countryPaint';
 import { countryAt, countryName, flagEmoji } from '@/features/map/geo';
 import { LocationSheet } from '@/features/map/LocationSheet';
+import { MemorySheet } from '@/features/map/MemorySheet';
 import { useMarks } from '@/features/map/useMarks';
 import { PlaceSheet } from '@/features/map/PlaceSheet';
 import { useCountryRollup } from '@/features/map/useCountryRollup';
@@ -88,6 +89,7 @@ export default function WorldMapScreen() {
   }, [memories, spaceMemories, myUid]);
 
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
   const [tapped, setTapped] = useState<TappedLocation | null>(null);
   const [layers, setLayers] = useState<Layers>({
     places: true,
@@ -104,8 +106,9 @@ export default function WorldMapScreen() {
   const highlightId = useMapFocus((s) => s.highlightId);
   const clearHighlight = useMapFocus((s) => s.clearHighlight);
 
-  // "Show on map" from a memory: turn memories on and fly in close enough that
-  // individual pins (not clusters) render, so the highlighted one is visible.
+  // "Show on map" from a memory: turn memories on, fly in close enough that
+  // individual pins (not clusters) render, and open that memory's card — the
+  // same state as if the user had tapped its pin.
   useEffect(() => {
     if (!focusTarget) return;
     setLayers((prev) => ({ ...prev, memories: true }));
@@ -118,12 +121,23 @@ export default function WorldMapScreen() {
       },
       800,
     );
+    if (highlightId?.startsWith('mem-')) {
+      setSelectedPlace(null);
+      setTapped(null);
+      setSelectedMemoryId(highlightId.slice(4));
+    }
     clearTarget();
-  }, [focusTarget, clearTarget]);
+  }, [focusTarget, clearTarget, highlightId]);
 
   const mappedMemories = useMemo(
     () => (layers.memories ? allMemories.filter((m) => m.coordinates) : []),
     [allMemories, layers.memories],
+  );
+
+  // Derived (not stored) so the open card reflects live edits/deletes.
+  const selectedMemory = useMemo(
+    () => allMemories.find((m) => m.id === selectedMemoryId) ?? null,
+    [allMemories, selectedMemoryId],
   );
   const mappedFood = useMemo(
     () => (layers.food ? food.filter((f) => f.coordinates) : []),
@@ -194,6 +208,10 @@ export default function WorldMapScreen() {
         onRegionChangeComplete={(r) => setLatDelta(r.latitudeDelta)}
         onPress={(e) => {
           if (highlightId) clearHighlight();
+          if (selectedMemoryId) {
+            setSelectedMemoryId(null);
+            return;
+          }
           if (selectedPlace) {
             setSelectedPlace(null);
             return;
@@ -274,7 +292,8 @@ export default function WorldMapScreen() {
 
         {level === 'individual' &&
           mappedMemories.map((memory) => {
-            const highlighted = highlightId === `mem-${memory.id}`;
+            const highlighted =
+              highlightId === `mem-${memory.id}` || selectedMemoryId === memory.id;
             return (
               <Marker
                 // Remount on highlight change: tracksViewChanges={false} freezes
@@ -285,7 +304,9 @@ export default function WorldMapScreen() {
                 zIndex={highlighted ? 10 : undefined}
                 onPress={(e) => {
                   e.stopPropagation();
-                  router.push({ pathname: '/memory/[id]', params: { id: memory.id } });
+                  setSelectedPlace(null);
+                  setTapped(null);
+                  setSelectedMemoryId(memory.id);
                 }}
               >
                 <View className="items-center">
@@ -409,7 +430,16 @@ export default function WorldMapScreen() {
         <Icon name="plus" size={26} color="#FFFFFF" strokeWidth={2.2} />
       </Pressable>
 
-      {selectedPlace ? (
+      {selectedMemory ? (
+        <MemorySheet
+          memory={selectedMemory}
+          partnerName={partnerName}
+          onClose={() => {
+            setSelectedMemoryId(null);
+            clearHighlight();
+          }}
+        />
+      ) : selectedPlace ? (
         <PlaceSheet place={selectedPlace} onClose={() => setSelectedPlace(null)} />
       ) : tapped ? (
         <LocationSheet
