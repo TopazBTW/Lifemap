@@ -31,6 +31,18 @@ https://docs.expo.dev/versions/v54.0.0/. Consequences:
   `grep -cE '\.#[a-zA-Z]' <bundle>` against the hermes-profile bundle after
   any babel/firebase change.
 
+## Firebase Storage uploads must use an XHR Blob
+
+React Native **cannot build a Blob from an ArrayBuffer** — "Creating blobs from
+'ArrayBuffer' and 'ArrayBufferView' are not supported". The Firebase JS SDK
+converts both `uploadString(base64)` and `uploadBytes(Uint8Array)` into a Blob
+internally, so **both throw** at runtime (they typecheck fine).
+
+The only working path is a *native* Blob fetched over XHR
+(`xhr.responseType = 'blob'`) passed to `uploadBytes`, which forwards it
+untouched — see `uploadImage()` in `src/shared/lib/storage.ts`. Close the blob
+after upload; RN blobs pin native memory.
+
 ## Free-tier-only Firebase (no Blaze, no bank card)
 
 The owner will not attach billing. Therefore:

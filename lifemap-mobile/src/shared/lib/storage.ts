@@ -4,7 +4,7 @@ import {
   getDownloadURL,
   listAll,
   ref,
-  uploadString,
+  uploadBytes,
 } from 'firebase/storage';
 
 import { storage } from '@/shared/lib/firebase';
@@ -21,6 +21,26 @@ import { storage } from '@/shared/lib/firebase';
 const MAX_WIDTH = 1600;
 const QUALITY = 0.7;
 
+/**
+ * Read a local file into a **native** Blob via XHR.
+ *
+ * Load-bearing: React Native cannot construct a Blob from an ArrayBuffer
+ * ("Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not
+ * supported"), which rules out `uploadString(base64)` and `uploadBytes(bytes)`
+ * — the Firebase SDK converts both to a Blob internally. An XHR-fetched Blob is
+ * backed by native blob data, so `uploadBytes` forwards it untouched.
+ */
+function uriToBlob(uri: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onerror = () => reject(new Error('Could not read the photo.'));
+    xhr.responseType = 'blob';
+    xhr.open('GET', uri, true);
+    xhr.send(null);
+  });
+}
+
 export async function uploadImage(
   uri: string,
   storagePath: string,
@@ -31,16 +51,14 @@ export async function uploadImage(
   const result = await image.saveAsync({
     format: SaveFormat.JPEG,
     compress: QUALITY,
-    base64: true,
+    base64: false,
   });
-  if (!result.base64) throw new Error('Could not read the compressed photo.');
 
-  // uploadString(base64) rather than uploadBytes(blob): RN Blobs are flaky with
-  // the Firebase JS SDK on this Hermes runtime; base64 upload is reliable.
+  const blob = await uriToBlob(result.uri);
   const fileRef = ref(storage, storagePath);
-  await uploadString(fileRef, result.base64, 'base64', {
-    contentType: 'image/jpeg',
-  });
+  await uploadBytes(fileRef, blob, { contentType: 'image/jpeg' });
+  // RN blobs hold native memory until closed.
+  (blob as Blob & { close?: () => void }).close?.();
 
   return { downloadUrl: await getDownloadURL(fileRef), storagePath };
 }
