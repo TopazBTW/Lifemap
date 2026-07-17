@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   onSnapshot,
   type DocumentReference,
+  type FirestoreError,
   type Query,
 } from 'firebase/firestore';
 import { useEffect } from 'react';
@@ -16,7 +17,21 @@ import { useEffect } from 'react';
  * The pattern: `onSnapshot` keeps `setQueryData` fresh; the `useQuery` beneath
  * never refetches on its own (staleTime: Infinity) — Firestore is the source
  * of truth for freshness.
+ *
+ * **Every listener MUST pass an onError callback.** Without one, a listener
+ * error (most commonly `permission-denied` during sign-out or before a
+ * couple-space membership resolves) is an *uncaught* async error — harmless in
+ * dev (red box), but in a production/hosted build it can crash the whole app.
+ * The handler swallows it and keeps the last-good data.
  */
+function onListenerError(key: readonly unknown[]) {
+  return (err: FirestoreError) => {
+    // Expected and benign: fires whenever a listener outlives read access
+    // (sign-out, token refresh, membership change). Keep the cached data.
+    if (__DEV__) console.warn('live listener error', key, err.code);
+  };
+}
+
 export function useLiveCollection<T>(
   key: readonly unknown[],
   query: Query | null,
@@ -26,12 +41,16 @@ export function useLiveCollection<T>(
 
   useEffect(() => {
     if (!query) return;
-    const unsub = onSnapshot(query, (snap) => {
-      const rows = snap.docs.map((d) =>
-        map(d.id, d.data() as Record<string, unknown>),
-      );
-      qc.setQueryData(key, rows);
-    });
+    const unsub = onSnapshot(
+      query,
+      (snap) => {
+        const rows = snap.docs.map((d) =>
+          map(d.id, d.data() as Record<string, unknown>),
+        );
+        qc.setQueryData(key, rows);
+      },
+      onListenerError(key),
+    );
     return unsub;
     // key is a stable serialisable array; stringify avoids resubscribing on
     // every render from a new array identity.
@@ -56,14 +75,18 @@ export function useLiveDoc<T>(
 
   useEffect(() => {
     if (!ref) return;
-    const unsub = onSnapshot(ref, (snap) => {
-      qc.setQueryData(
-        key,
-        snap.exists()
-          ? map(snap.id, snap.data() as Record<string, unknown>)
-          : null,
-      );
-    });
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        qc.setQueryData(
+          key,
+          snap.exists()
+            ? map(snap.id, snap.data() as Record<string, unknown>)
+            : null,
+        );
+      },
+      onListenerError(key),
+    );
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc, JSON.stringify(key), ref !== null]);
