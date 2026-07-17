@@ -96,7 +96,7 @@ export default function TimelineScreen() {
       <Pressable onPress={() => router.push('/couple')} className="pb-4">
         <Glass>
           <View className="flex-row items-center gap-3 p-4">
-            <Text style={{ fontSize: 24 }}>💞</Text>
+            <Text style={{ fontSize: 24, lineHeight: 32 }}>💞</Text>
             <View className="flex-1">
               <Text className="text-base font-semibold text-white">Shared space</Text>
               <Text className="text-xs text-white/45">
@@ -121,7 +121,7 @@ export default function TimelineScreen() {
         renderItem={({ item }) => (
           <Glass>
             <View className="flex-row items-center gap-3 p-4">
-              <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
+              <Text style={{ fontSize: 24, lineHeight: 32 }}>{item.emoji}</Text>
               <View className="flex-1 gap-0.5">
                 <Text className="text-sm font-semibold text-white" numberOfLines={1}>
                   {item.title}

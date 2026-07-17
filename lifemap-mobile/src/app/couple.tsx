@@ -204,7 +204,7 @@ function ShareMapToggle({ spaceId }: { spaceId: string }) {
   return (
     <Glass>
       <Pressable onPress={toggle} disabled={busy} className="flex-row items-center gap-3 p-4">
-        <Text style={{ fontSize: 24 }}>🗺️</Text>
+        <Text style={{ fontSize: 24, lineHeight: 32 }}>🗺️</Text>
         <View className="flex-1">
           <Text className="text-base font-semibold text-white">Share my map</Text>
           <Text className="text-xs text-white/45">

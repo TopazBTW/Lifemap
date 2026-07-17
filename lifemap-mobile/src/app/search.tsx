@@ -195,7 +195,7 @@ export default function SearchScreen() {
           <Pressable onPress={item.onPress}>
             <Glass>
               <View className="flex-row items-center gap-3 p-4">
-                <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
+                <Text style={{ fontSize: 24, lineHeight: 32 }}>{item.emoji}</Text>
                 <View className="flex-1 gap-0.5">
                   <Text className="text-sm font-semibold text-white" numberOfLines={1}>
                     {item.title}
