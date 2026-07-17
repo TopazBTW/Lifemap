@@ -55,6 +55,7 @@ export default function RootLayout() {
               options={{ presentation: 'modal' }}
             />
             <Stack.Screen name="couple" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="search" options={{ presentation: 'modal' }} />
           </Stack.Protected>
           <Stack.Protected guard={!user}>
             <Stack.Screen name="(auth)" />

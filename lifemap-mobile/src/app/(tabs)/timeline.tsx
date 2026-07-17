@@ -6,7 +6,7 @@ import { signOut, useSession } from '@/features/auth/session';
 import { useMemories } from '@/features/memories/useMemories';
 import { useFoodEntries, useStayEntries } from '@/features/passport/usePassport';
 import { MOODS } from '@/shared/types/domain';
-import { Button, EmptyState, Glass, Screen } from '@/shared/ui';
+import { Button, EmptyState, Glass, Icon, Screen } from '@/shared/ui';
 
 type TimelineItem = {
   id: string;
@@ -71,17 +71,26 @@ export default function TimelineScreen() {
           <Text className="text-3xl font-bold text-white">Timeline</Text>
           <Text className="text-sm text-white/45">{user?.displayName ?? ''}</Text>
         </View>
-        <Button
-          title="Sign out"
-          variant="ghost"
-          size="sm"
-          onPress={() =>
-            Alert.alert('Sign out', 'Sign out of LifeMap?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-            ])
-          }
-        />
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            onPress={() => router.push('/search')}
+            className="h-10 w-10 items-center justify-center rounded-full bg-white/10"
+            accessibilityLabel="Search"
+          >
+            <Icon name="search" size={20} color="#FFFFFF" strokeWidth={1.8} />
+          </Pressable>
+          <Button
+            title="Sign out"
+            variant="ghost"
+            size="sm"
+            onPress={() =>
+              Alert.alert('Sign out', 'Sign out of LifeMap?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+              ])
+            }
+          />
+        </View>
       </View>
 
       <Pressable onPress={() => router.push('/couple')} className="pb-4">

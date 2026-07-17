@@ -6,7 +6,8 @@ export type IconName =
   | 'reviews'
   | 'timeline'
   | 'plus'
-  | 'close';
+  | 'close'
+  | 'search';
 
 /**
  * Hand-drawn line icons (24px grid, round joins) — a small, consistent set so
@@ -65,6 +66,12 @@ export function Icon({
       )}
       {name === 'plus' && <Path {...s} d="M12 5v14M5 12h14" />}
       {name === 'close' && <Path {...s} d="M6 6l12 12M18 6L6 18" />}
+      {name === 'search' && (
+        <>
+          <Circle {...s} cx={11} cy={11} r={7} fill="none" />
+          <Path {...s} d="M20 20l-3.6-3.6" />
+        </>
+      )}
     </Svg>
   );
 }
